@@ -1,0 +1,16 @@
+{
+  "urdf_load": true,
+  "mjcf_load": true,
+  "link_count": 5,
+  "joint_count": 4,
+  "passive_bearing_axes": 2,
+  "finite_tvc_axes": 2,
+  "cad_leaf_instances": 80,
+  "cad_saved_pose_max_error": 2.3503008079236324e-13,
+  "urdf_mjcf_max_pose_error": 6.760147996942578e-13,
+  "upright_axis_error": 2.956456937231834e-13,
+  "independent_joint_motion": true,
+  "one_second_gravity_integration_finite": true,
+  "mass_calibrated": false,
+  "flight_controller_connected": false
+}

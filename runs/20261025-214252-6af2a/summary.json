@@ -1,0 +1,17 @@
+{
+  "id": "20261025-214252-6af2a",
+  "status": "failed",
+  "message": "轴承转角超过 180°，结束本次姿态稳定测试。",
+  "duration_s": 1.4,
+  "sample_count": 70,
+  "peak_tilt_deg": 156.35488883391946,
+  "rms_tilt_deg": 75.39712706771405,
+  "final_tilt_deg": 156.35488883391946,
+  "settling_time_s": null,
+  "limited_pct": 100.0,
+  "created_at": "2026-10-25 21:42:52",
+  "controller": "f505f51164e602e16f1893138ee90e8f62db153309d1e694a3d9bfed88b9937b",
+  "scope": "原工程 Attitude + GimbalPid",
+  "mass_calibrated": false,
+  "seed": 42
+}

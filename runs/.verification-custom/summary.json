@@ -1,0 +1,17 @@
+{
+  "id": ".verification-custom",
+  "status": "failed",
+  "message": "轴承转角超过 180°，结束本次姿态稳定测试。",
+  "duration_s": 1.88,
+  "sample_count": 94,
+  "peak_tilt_deg": 149.98481537074278,
+  "rms_tilt_deg": 78.40002731457037,
+  "final_tilt_deg": 147.70549200562746,
+  "settling_time_s": null,
+  "limited_pct": 0.0,
+  "created_at": "2026-10-25 21:35:40",
+  "controller": "98c83ed52dbcec285d16491b64d39f72cc6c14452c5fa0b7dec9d77e9af3be85",
+  "scope": "自定义 C++ 仿真接口",
+  "mass_calibrated": false,
+  "seed": 42
+}

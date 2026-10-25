@@ -1,0 +1,29 @@
+{
+  "petg_density_kg_m3": 1270,
+  "aluminium_density_kg_m3": 2700,
+  "printed_cad_volume_factor": 1.0,
+  "petg_model_ids": [
+    16,
+    18,
+    23,
+    25,
+    26,
+    27,
+    37,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "aluminium_model_ids": [
+    0,
+    1,
+    7,
+    10,
+    11
+  ],
+  "measured_part_mass_kg": {},
+  "note": "PETG 和铝型材由用户确认；密度是标称值。打印结构按 CAD 实体体积计算，未校正填充。未列入材质的硬件保留原 CAD 质量，仍待称重。可按 model_id 在 measured_part_mass_kg 中填写实测质量。"
+}

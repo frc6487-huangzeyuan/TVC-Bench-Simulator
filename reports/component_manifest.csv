@@ -1,0 +1,81 @@
+﻿component,model_id,source_path,link,mass_kg,mass_basis,raw_mesh
+03-2020铝型材300mm-4,0,C:\Projects\机械部分\03-2020铝型材300mm.SLDPRT,base,0.14761700696667965,aluminium nominal density,part_000.stl
+03-2020铝型材300mm-3,0,C:\Projects\机械部分\03-2020铝型材300mm.SLDPRT,base,0.14761700696667965,aluminium nominal density,part_000.stl
+03-框架底部型材-1,1,C:\Projects\机械部分\03-框架底部型材.SLDPRT,base,0.2706311794389126,aluminium nominal density,part_001.stl
+03-立式轴承座222-1/立式轴承座.STEP-1/RTWN22_1.STEP-1,4,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\RTWN22_1.STEP.SLDPRT,base,0.0001286261425384897,CAD default; hardware mass unverified,part_004.stl
+03-立式轴承座222-1/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1,5,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT,base,0.008855634615649397,CAD default; hardware mass unverified,part_005.stl
+03-立式轴承座222-1/立式轴承座.STEP-1/6900ZZ.STEP-1,6,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\6900ZZ.STEP.SLDPRT,base,0.001660856029941144,CAD default; hardware mass unverified,part_006.stl
+03-高度型材-2,7,C:\Projects\机械部分\03-高度型材.SLDPRT,base,0.1968226759555727,aluminium nominal density,part_007.stl
+03-高度型材-3,7,C:\Projects\机械部分\03-高度型材.SLDPRT,base,0.1968226759555727,aluminium nominal density,part_007.stl
+03-高度型材-4,7,C:\Projects\机械部分\03-高度型材.SLDPRT,base,0.1968226759555727,aluminium nominal density,part_007.stl
+03-2020铝型材300mm-1,0,C:\Projects\机械部分\03-2020铝型材300mm.SLDPRT,base,0.14761700696667965,aluminium nominal density,part_000.stl
+03-2020铝型材300mm-2,0,C:\Projects\机械部分\03-2020铝型材300mm.SLDPRT,base,0.14761700696667965,aluminium nominal density,part_000.stl
+03-高度型材-1,7,C:\Projects\机械部分\03-高度型材.SLDPRT,base,0.1968226759555727,aluminium nominal density,part_007.stl
+03-75mm 10mm-1,8,C:\Projects\机械部分\03-75mm 10mm.SLDPRT,outer_frame,0.008639379797371931,CAD default; hardware mass unverified,part_008.stl
+03-框架2-1/03-立式轴承座222-2/立式轴承座.STEP-1/RTWN22_1.STEP-1,4,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\RTWN22_1.STEP.SLDPRT,outer_frame,0.0001286261425384897,CAD default; hardware mass unverified,part_004.stl
+03-框架2-1/03-立式轴承座222-2/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1,5,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT,outer_frame,0.008855634615649397,CAD default; hardware mass unverified,part_005.stl
+03-框架2-1/03-立式轴承座222-2/立式轴承座.STEP-1/6900ZZ.STEP-1,6,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\6900ZZ.STEP.SLDPRT,outer_frame,0.001660856029941144,CAD default; hardware mass unverified,part_006.stl
+03-框架2-1/03-400mm-2,10,C:\Projects\机械部分\03-400mm.SLDPRT,outer_frame,0.19682267595557273,aluminium nominal density,part_010.stl
+03-框架2-1/03-立式轴承座222-3/立式轴承座.STEP-1/RTWN22_1.STEP-1,4,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\RTWN22_1.STEP.SLDPRT,outer_frame,0.0001286261425384897,CAD default; hardware mass unverified,part_004.stl
+03-框架2-1/03-立式轴承座222-3/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1,5,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT,outer_frame,0.008855634615649397,CAD default; hardware mass unverified,part_005.stl
+03-框架2-1/03-立式轴承座222-3/立式轴承座.STEP-1/6900ZZ.STEP-1,6,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\6900ZZ.STEP.SLDPRT,outer_frame,0.001660856029941144,CAD default; hardware mass unverified,part_006.stl
+03-框架2-1/03-260mm-5,11,C:\Projects\机械部分\03-260mm.SLDPRT,outer_frame,0.17714040836001543,aluminium nominal density,part_011.stl
+03-框架2-1/03-400mm-1,10,C:\Projects\机械部分\03-400mm.SLDPRT,outer_frame,0.19682267595557273,aluminium nominal density,part_010.stl
+03-框架2-1/03-260mm-1,11,C:\Projects\机械部分\03-260mm.SLDPRT,outer_frame,0.17714040836001543,aluminium nominal density,part_011.stl
+03-框架2-1/03-立式轴承座222-1/立式轴承座.STEP-1/RTWN22_1.STEP-1,4,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\RTWN22_1.STEP.SLDPRT,outer_frame,0.0001286261425384897,CAD default; hardware mass unverified,part_004.stl
+03-框架2-1/03-立式轴承座222-1/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1,5,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT,outer_frame,0.008855634615649397,CAD default; hardware mass unverified,part_005.stl
+03-框架2-1/03-立式轴承座222-1/立式轴承座.STEP-1/6900ZZ.STEP-1,6,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\6900ZZ.STEP.SLDPRT,outer_frame,0.001660856029941144,CAD default; hardware mass unverified,part_006.stl
+03-框架2-1/03-立式轴承座222-4/立式轴承座.STEP-1/RTWN22_1.STEP-1,4,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\RTWN22_1.STEP.SLDPRT,outer_frame,0.0001286261425384897,CAD default; hardware mass unverified,part_004.stl
+03-框架2-1/03-立式轴承座222-4/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1,5,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT,outer_frame,0.008855634615649397,CAD default; hardware mass unverified,part_005.stl
+03-框架2-1/03-立式轴承座222-4/立式轴承座.STEP-1/6900ZZ.STEP-1,6,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\6900ZZ.STEP.SLDPRT,outer_frame,0.001660856029941144,CAD default; hardware mass unverified,part_006.stl
+01-单轴电机组装-2/01-X2212无刷电机-1,13,C:\Projects\机械部分\01-X2212无刷电机.SLDPRT,thrust_unit,0.007976307397923632,CAD default; hardware mass unverified,part_013.stl
+01-单轴电机组装-2/01-螺旋桨-1,14,C:\Projects\机械部分\01-螺旋桨.SLDPRT,thrust_unit,0.0015593761249396523,CAD default; hardware mass unverified,part_014.stl
+01-单轴电机组装-2/01-无刷电机头-1,15,C:\Projects\机械部分\01-无刷电机头.SLDPRT,thrust_unit,0.0007948575123700785,CAD default; hardware mass unverified,part_015.stl
+01-单轴电机组装-2/01-双轴舵机臂-1,16,C:\Projects\机械部分\01-双轴舵机臂.SLDPRT,thrust_unit,0.010480218273943874,PETG nominal density; CAD solid volume,part_016.stl
+01-单轴电机组装-2/01-M3 20尼龙套-5,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/02-L型连接件-2,18,C:\Projects\机械部分\02-L型连接件.SLDPRT,rocket_body,0.008582345262473225,PETG nominal density; CAD solid volume,part_018.stl
+01-单轴电机组装-2/03-菱形轴承座222-2/C-BACA6900ZZ.stp-1/HOUSING_C-BACA6900ZZ.stp-1,21,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\HOUSING_C-BACA6900ZZ.stp.SLDPRT,rocket_body,0.005462830929471948,CAD default; hardware mass unverified,part_021.stl
+01-单轴电机组装-2/03-菱形轴承座222-2/C-BACA6900ZZ.stp-1/BEARING_C-BACA6900ZZ.stp-1,22,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\BEARING_C-BACA6900ZZ.stp.SLDPRT,rocket_body,0.0017309131520440537,CAD default; hardware mass unverified,part_022.stl
+01-单轴电机组装-2/01-螺旋桨外壳-1,23,C:\Projects\机械部分\01-螺旋桨外壳.SLDPRT,thrust_unit,0.158452294265364,PETG nominal density; CAD solid volume,part_023.stl
+01-单轴电机组装-2/main-horn-25T-8holes-3D.step-1,24,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\main-horn-25T-8holes-3D.step.SLDPRT,thrust_unit,0.0009375194398303809,CAD default; hardware mass unverified,part_024.stl
+01-单轴电机组装-2/02-八边形外壳 150mm-1,25,C:\Projects\机械部分\02-八边形外壳 150mm.SLDPRT,rocket_body,0.3702094177772108,PETG nominal density; CAD solid volume,part_025.stl
+01-单轴电机组装-2/02-L型连接件-1,18,C:\Projects\机械部分\02-L型连接件.SLDPRT,rocket_body,0.008582345262473225,PETG nominal density; CAD solid volume,part_018.stl
+01-单轴电机组装-2/03-菱形轴承座222-1/C-BACA6900ZZ.stp-1/HOUSING_C-BACA6900ZZ.stp-1,21,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\HOUSING_C-BACA6900ZZ.stp.SLDPRT,rocket_body,0.005462830929471948,CAD default; hardware mass unverified,part_021.stl
+01-单轴电机组装-2/03-菱形轴承座222-1/C-BACA6900ZZ.stp-1/BEARING_C-BACA6900ZZ.stp-1,22,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\BEARING_C-BACA6900ZZ.stp.SLDPRT,rocket_body,0.0017309131520440537,CAD default; hardware mass unverified,part_022.stl
+01-单轴电机组装-2/01-旋转平台-1,26,C:\Projects\机械部分\01-旋转平台.SLDPRT,azimuth_stage,0.02924664699111718,PETG nominal density; CAD solid volume,part_026.stl
+01-单轴电机组装-2/01-单轴电机支架-2,27,C:\Projects\机械部分\01-单轴电机支架.SLDPRT,rocket_body,0.03804169802007202,PETG nominal density; CAD solid volume,part_027.stl
+01-单轴电机组装-2/01-单轴舵机-1,28,C:\Projects\机械部分\01-单轴舵机.SLDPRT,rocket_body,0.03244156815653546,CAD default; hardware mass unverified,part_028.stl
+01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/____________.STEP-1,31,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\____________.STEP.SLDPRT,azimuth_stage,0.002662680345688866,CAD default; hardware mass unverified,part_031.stl
+01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/______.step_1.STEP-1,32,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\______.step_1.STEP.SLDPRT,thrust_unit,0.00034099494776186336,CAD default; hardware mass unverified,part_032.stl
+01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/3pin____.step_1.STEP-2,33,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\3pin____.step_1.STEP.SLDPRT,azimuth_stage,0.00014080354665991452,CAD default; hardware mass unverified,part_033.stl
+01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/____-_____1.STEP-1,34,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\____-_____1.STEP.SLDPRT,azimuth_stage,0.0018111560122071955,CAD default; hardware mass unverified,part_034.stl
+01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/_________1.STEP-1,35,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\_________1.STEP.SLDPRT,azimuth_stage,0.001839032574920596,CAD default; hardware mass unverified,part_035.stl
+01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/____________-0.STEP-1,36,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\____________-0.STEP.SLDPRT,azimuth_stage,0.0016385182958797734,CAD default; hardware mass unverified,part_036.stl
+01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/3pin____.step_1.STEP-3,33,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\3pin____.step_1.STEP.SLDPRT,azimuth_stage,0.00014080354665991452,CAD default; hardware mass unverified,part_033.stl
+01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/01-双轴舵机底座-1,37,C:\Projects\机械部分\01-双轴舵机底座.SLDPRT,azimuth_stage,0.0285963492383149,PETG nominal density; CAD solid volume,part_037.stl
+01-单轴电机组装-2/01-M3 20尼龙套-1,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-金属主舵盘-1,38,C:\Projects\机械部分\01-金属主舵盘.SLDPRT,azimuth_stage,0.0007505256302867342,CAD default; hardware mass unverified,part_038.stl
+01-单轴电机组装-2/01-M3 20尼龙套-2,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-M3 20尼龙套-9,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-M3 20尼龙套-3,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-M3 20尼龙套-8,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-M3 20尼龙套-6,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-M3 20尼龙套-10,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-M3 20尼龙套-12,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-M3 20尼龙套-7,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-M3 20尼龙套-4,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+01-单轴电机组装-2/01-M3 20尼龙套-11,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
+03-10mm光杆 125mm-1,39,C:\Projects\机械部分\03-10mm光杆 125mm.SLDPRT,rocket_body,0.0098174770424681,CAD default; hardware mass unverified,part_039.stl
+03-重力模块舵机-5/04-齿轮.step-1,41,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\04-齿轮.step.SLDPRT,rocket_body,0.006266963251371878,PETG nominal density; CAD solid volume,part_041.stl
+03-重力模块舵机-5/01-单轴舵机-1,28,C:\Projects\机械部分\01-单轴舵机.SLDPRT,rocket_body,0.03244156815653546,CAD default; hardware mass unverified,part_028.stl
+03-重力模块舵机-5/01-金属主舵盘-1,38,C:\Projects\机械部分\01-金属主舵盘.SLDPRT,rocket_body,0.0007505256302867342,CAD default; hardware mass unverified,part_038.stl
+02-连接件-1,42,C:\Projects\机械部分\02-连接件.SLDPRT,rocket_body,0.001018841172154269,PETG nominal density; CAD solid volume,part_042.stl
+03-10mm光杆 125mm-2,39,C:\Projects\机械部分\03-10mm光杆 125mm.SLDPRT,rocket_body,0.0098174770424681,CAD default; hardware mass unverified,part_039.stl
+03-立式轴承座222-2/立式轴承座.STEP-1/RTWN22_1.STEP-1,4,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\RTWN22_1.STEP.SLDPRT,base,0.0001286261425384897,CAD default; hardware mass unverified,part_004.stl
+03-立式轴承座222-2/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1,5,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT,base,0.008855634615649397,CAD default; hardware mass unverified,part_005.stl
+03-立式轴承座222-2/立式轴承座.STEP-1/6900ZZ.STEP-1,6,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\6900ZZ.STEP.SLDPRT,base,0.001660856029941144,CAD default; hardware mass unverified,part_006.stl
+03-75mm 10mm-2,8,C:\Projects\机械部分\03-75mm 10mm.SLDPRT,outer_frame,0.008639379797371931,CAD default; hardware mass unverified,part_008.stl
+05-电子部分-1,43,C:\Projects\机械部分\05-电子部分.SLDPRT,rocket_body,0.09074748193763729,PETG nominal density; CAD solid volume,part_043.stl
+04-直齿条.step-1,44,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\04-直齿条.step.SLDPRT,rocket_body,0.012338916639239772,PETG nominal density; CAD solid volume,part_044.stl
+04-舵机齿轮连接-2,45,C:\Projects\机械部分\04-舵机齿轮连接.SLDPRT,rocket_body,0.030612397566995825,PETG nominal density; CAD solid volume,part_045.stl
+06-火箭顶锥-3,46,C:\Projects\机械部分\06-火箭顶锥.SLDPRT,rocket_body,0.2087533379066494,PETG nominal density; CAD solid volume,part_046.stl

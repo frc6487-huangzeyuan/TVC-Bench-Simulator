@@ -1,0 +1,17 @@
+{
+  "id": "20261025-213541-f66be",
+  "status": "error",
+  "message": "控制器进程异常退出（代码 27）。",
+  "duration_s": 0,
+  "sample_count": 0,
+  "peak_tilt_deg": null,
+  "rms_tilt_deg": null,
+  "final_tilt_deg": null,
+  "settling_time_s": null,
+  "limited_pct": 0,
+  "created_at": "2026-10-25 21:35:41",
+  "controller": "10fe0b79bbadaaf22f9e0cff140ff6ff51ccb15d48aabf8ba1be5b6c3a02b4a5",
+  "scope": "自定义 C++ 仿真接口",
+  "mass_calibrated": false,
+  "seed": 42
+}

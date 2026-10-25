@@ -1,0 +1,17 @@
+{
+  "id": "20261025-220038-b8860",
+  "status": "completed",
+  "message": "实验完成",
+  "duration_s": 20.0,
+  "sample_count": 1000,
+  "peak_tilt_deg": 5.873502065551765,
+  "rms_tilt_deg": 4.737704492431943,
+  "final_tilt_deg": 4.620024613577722,
+  "settling_time_s": null,
+  "limited_pct": 0.4,
+  "created_at": "2026-10-25 22:00:38",
+  "controller": "f505f51164e602e16f1893138ee90e8f62db153309d1e694a3d9bfed88b9937b",
+  "scope": "原工程 Attitude + GimbalPid",
+  "mass_calibrated": false,
+  "seed": 42
+}

@@ -1,0 +1,722 @@
+[
+  {
+    "component": "03-2020铝型材300mm-4",
+    "model_id": 0,
+    "source_path": "C:\\Projects\\机械部分\\03-2020铝型材300mm.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.14761700696667965,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_000.stl"
+  },
+  {
+    "component": "03-2020铝型材300mm-3",
+    "model_id": 0,
+    "source_path": "C:\\Projects\\机械部分\\03-2020铝型材300mm.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.14761700696667965,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_000.stl"
+  },
+  {
+    "component": "03-框架底部型材-1",
+    "model_id": 1,
+    "source_path": "C:\\Projects\\机械部分\\03-框架底部型材.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.2706311794389126,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_001.stl"
+  },
+  {
+    "component": "03-立式轴承座222-1/立式轴承座.STEP-1/RTWN22_1.STEP-1",
+    "model_id": 4,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\RTWN22_1.STEP.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.0001286261425384897,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_004.stl"
+  },
+  {
+    "component": "03-立式轴承座222-1/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1",
+    "model_id": 5,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.008855634615649397,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_005.stl"
+  },
+  {
+    "component": "03-立式轴承座222-1/立式轴承座.STEP-1/6900ZZ.STEP-1",
+    "model_id": 6,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\6900ZZ.STEP.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.001660856029941144,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_006.stl"
+  },
+  {
+    "component": "03-高度型材-2",
+    "model_id": 7,
+    "source_path": "C:\\Projects\\机械部分\\03-高度型材.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.1968226759555727,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_007.stl"
+  },
+  {
+    "component": "03-高度型材-3",
+    "model_id": 7,
+    "source_path": "C:\\Projects\\机械部分\\03-高度型材.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.1968226759555727,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_007.stl"
+  },
+  {
+    "component": "03-高度型材-4",
+    "model_id": 7,
+    "source_path": "C:\\Projects\\机械部分\\03-高度型材.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.1968226759555727,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_007.stl"
+  },
+  {
+    "component": "03-2020铝型材300mm-1",
+    "model_id": 0,
+    "source_path": "C:\\Projects\\机械部分\\03-2020铝型材300mm.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.14761700696667965,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_000.stl"
+  },
+  {
+    "component": "03-2020铝型材300mm-2",
+    "model_id": 0,
+    "source_path": "C:\\Projects\\机械部分\\03-2020铝型材300mm.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.14761700696667965,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_000.stl"
+  },
+  {
+    "component": "03-高度型材-1",
+    "model_id": 7,
+    "source_path": "C:\\Projects\\机械部分\\03-高度型材.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.1968226759555727,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_007.stl"
+  },
+  {
+    "component": "03-75mm 10mm-1",
+    "model_id": 8,
+    "source_path": "C:\\Projects\\机械部分\\03-75mm 10mm.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.008639379797371931,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_008.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-2/立式轴承座.STEP-1/RTWN22_1.STEP-1",
+    "model_id": 4,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\RTWN22_1.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.0001286261425384897,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_004.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-2/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1",
+    "model_id": 5,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.008855634615649397,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_005.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-2/立式轴承座.STEP-1/6900ZZ.STEP-1",
+    "model_id": 6,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\6900ZZ.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.001660856029941144,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_006.stl"
+  },
+  {
+    "component": "03-框架2-1/03-400mm-2",
+    "model_id": 10,
+    "source_path": "C:\\Projects\\机械部分\\03-400mm.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.19682267595557273,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_010.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-3/立式轴承座.STEP-1/RTWN22_1.STEP-1",
+    "model_id": 4,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\RTWN22_1.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.0001286261425384897,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_004.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-3/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1",
+    "model_id": 5,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.008855634615649397,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_005.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-3/立式轴承座.STEP-1/6900ZZ.STEP-1",
+    "model_id": 6,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\6900ZZ.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.001660856029941144,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_006.stl"
+  },
+  {
+    "component": "03-框架2-1/03-260mm-5",
+    "model_id": 11,
+    "source_path": "C:\\Projects\\机械部分\\03-260mm.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.17714040836001543,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_011.stl"
+  },
+  {
+    "component": "03-框架2-1/03-400mm-1",
+    "model_id": 10,
+    "source_path": "C:\\Projects\\机械部分\\03-400mm.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.19682267595557273,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_010.stl"
+  },
+  {
+    "component": "03-框架2-1/03-260mm-1",
+    "model_id": 11,
+    "source_path": "C:\\Projects\\机械部分\\03-260mm.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.17714040836001543,
+    "mass_basis": "aluminium nominal density",
+    "raw_mesh": "part_011.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-1/立式轴承座.STEP-1/RTWN22_1.STEP-1",
+    "model_id": 4,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\RTWN22_1.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.0001286261425384897,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_004.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-1/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1",
+    "model_id": 5,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.008855634615649397,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_005.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-1/立式轴承座.STEP-1/6900ZZ.STEP-1",
+    "model_id": 6,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\6900ZZ.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.001660856029941144,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_006.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-4/立式轴承座.STEP-1/RTWN22_1.STEP-1",
+    "model_id": 4,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\RTWN22_1.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.0001286261425384897,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_004.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-4/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1",
+    "model_id": 5,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.008855634615649397,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_005.stl"
+  },
+  {
+    "component": "03-框架2-1/03-立式轴承座222-4/立式轴承座.STEP-1/6900ZZ.STEP-1",
+    "model_id": 6,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\6900ZZ.STEP.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.001660856029941144,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_006.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-X2212无刷电机-1",
+    "model_id": 13,
+    "source_path": "C:\\Projects\\机械部分\\01-X2212无刷电机.SLDPRT",
+    "link": "thrust_unit",
+    "mass_kg": 0.007976307397923632,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_013.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-螺旋桨-1",
+    "model_id": 14,
+    "source_path": "C:\\Projects\\机械部分\\01-螺旋桨.SLDPRT",
+    "link": "thrust_unit",
+    "mass_kg": 0.0015593761249396523,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_014.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-无刷电机头-1",
+    "model_id": 15,
+    "source_path": "C:\\Projects\\机械部分\\01-无刷电机头.SLDPRT",
+    "link": "thrust_unit",
+    "mass_kg": 0.0007948575123700785,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_015.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-双轴舵机臂-1",
+    "model_id": 16,
+    "source_path": "C:\\Projects\\机械部分\\01-双轴舵机臂.SLDPRT",
+    "link": "thrust_unit",
+    "mass_kg": 0.010480218273943874,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_016.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-5",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/02-L型连接件-2",
+    "model_id": 18,
+    "source_path": "C:\\Projects\\机械部分\\02-L型连接件.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.008582345262473225,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_018.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/03-菱形轴承座222-2/C-BACA6900ZZ.stp-1/HOUSING_C-BACA6900ZZ.stp-1",
+    "model_id": 21,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\HOUSING_C-BACA6900ZZ.stp.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.005462830929471948,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_021.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/03-菱形轴承座222-2/C-BACA6900ZZ.stp-1/BEARING_C-BACA6900ZZ.stp-1",
+    "model_id": 22,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\BEARING_C-BACA6900ZZ.stp.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.0017309131520440537,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_022.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-螺旋桨外壳-1",
+    "model_id": 23,
+    "source_path": "C:\\Projects\\机械部分\\01-螺旋桨外壳.SLDPRT",
+    "link": "thrust_unit",
+    "mass_kg": 0.158452294265364,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_023.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/main-horn-25T-8holes-3D.step-1",
+    "model_id": 24,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\main-horn-25T-8holes-3D.step.SLDPRT",
+    "link": "thrust_unit",
+    "mass_kg": 0.0009375194398303809,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_024.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/02-八边形外壳 150mm-1",
+    "model_id": 25,
+    "source_path": "C:\\Projects\\机械部分\\02-八边形外壳 150mm.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.3702094177772108,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_025.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/02-L型连接件-1",
+    "model_id": 18,
+    "source_path": "C:\\Projects\\机械部分\\02-L型连接件.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.008582345262473225,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_018.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/03-菱形轴承座222-1/C-BACA6900ZZ.stp-1/HOUSING_C-BACA6900ZZ.stp-1",
+    "model_id": 21,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\HOUSING_C-BACA6900ZZ.stp.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.005462830929471948,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_021.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/03-菱形轴承座222-1/C-BACA6900ZZ.stp-1/BEARING_C-BACA6900ZZ.stp-1",
+    "model_id": 22,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\BEARING_C-BACA6900ZZ.stp.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.0017309131520440537,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_022.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-旋转平台-1",
+    "model_id": 26,
+    "source_path": "C:\\Projects\\机械部分\\01-旋转平台.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.02924664699111718,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_026.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-单轴电机支架-2",
+    "model_id": 27,
+    "source_path": "C:\\Projects\\机械部分\\01-单轴电机支架.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.03804169802007202,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_027.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-单轴舵机-1",
+    "model_id": 28,
+    "source_path": "C:\\Projects\\机械部分\\01-单轴舵机.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.03244156815653546,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_028.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/____________.STEP-1",
+    "model_id": 31,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\____________.STEP.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.002662680345688866,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_031.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/______.step_1.STEP-1",
+    "model_id": 32,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\______.step_1.STEP.SLDPRT",
+    "link": "thrust_unit",
+    "mass_kg": 0.00034099494776186336,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_032.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/3pin____.step_1.STEP-2",
+    "model_id": 33,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\3pin____.step_1.STEP.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.00014080354665991452,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_033.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/____-_____1.STEP-1",
+    "model_id": 34,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\____-_____1.STEP.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0018111560122071955,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_034.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/_________1.STEP-1",
+    "model_id": 35,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\_________1.STEP.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.001839032574920596,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_035.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/____________-0.STEP-1",
+    "model_id": 36,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\____________-0.STEP.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0016385182958797734,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_036.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/ra8-rp8-rx8-series-3D.STEP-1/3pin____.step_1.STEP-3",
+    "model_id": 33,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\3pin____.step_1.STEP.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.00014080354665991452,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_033.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-45扭力PWM双轴舵机-2/01-双轴舵机底座-1",
+    "model_id": 37,
+    "source_path": "C:\\Projects\\机械部分\\01-双轴舵机底座.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0285963492383149,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_037.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-1",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-金属主舵盘-1",
+    "model_id": 38,
+    "source_path": "C:\\Projects\\机械部分\\01-金属主舵盘.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0007505256302867342,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_038.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-2",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-9",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-3",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-8",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-6",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-10",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-12",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-7",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-4",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "01-单轴电机组装-2/01-M3 20尼龙套-11",
+    "model_id": 17,
+    "source_path": "C:\\Projects\\机械部分\\01-M3 20尼龙套.SLDPRT",
+    "link": "azimuth_stage",
+    "mass_kg": 0.0006283185307179585,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_017.stl"
+  },
+  {
+    "component": "03-10mm光杆 125mm-1",
+    "model_id": 39,
+    "source_path": "C:\\Projects\\机械部分\\03-10mm光杆 125mm.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.0098174770424681,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_039.stl"
+  },
+  {
+    "component": "03-重力模块舵机-5/04-齿轮.step-1",
+    "model_id": 41,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\04-齿轮.step.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.006266963251371878,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_041.stl"
+  },
+  {
+    "component": "03-重力模块舵机-5/01-单轴舵机-1",
+    "model_id": 28,
+    "source_path": "C:\\Projects\\机械部分\\01-单轴舵机.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.03244156815653546,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_028.stl"
+  },
+  {
+    "component": "03-重力模块舵机-5/01-金属主舵盘-1",
+    "model_id": 38,
+    "source_path": "C:\\Projects\\机械部分\\01-金属主舵盘.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.0007505256302867342,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_038.stl"
+  },
+  {
+    "component": "02-连接件-1",
+    "model_id": 42,
+    "source_path": "C:\\Projects\\机械部分\\02-连接件.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.001018841172154269,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_042.stl"
+  },
+  {
+    "component": "03-10mm光杆 125mm-2",
+    "model_id": 39,
+    "source_path": "C:\\Projects\\机械部分\\03-10mm光杆 125mm.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.0098174770424681,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_039.stl"
+  },
+  {
+    "component": "03-立式轴承座222-2/立式轴承座.STEP-1/RTWN22_1.STEP-1",
+    "model_id": 4,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\RTWN22_1.STEP.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.0001286261425384897,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_004.stl"
+  },
+  {
+    "component": "03-立式轴承座222-2/立式轴承座.STEP-1/Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP-1",
+    "model_id": 5,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.008855634615649397,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_005.stl"
+  },
+  {
+    "component": "03-立式轴承座222-2/立式轴承座.STEP-1/6900ZZ.STEP-1",
+    "model_id": 6,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\6900ZZ.STEP.SLDPRT",
+    "link": "base",
+    "mass_kg": 0.001660856029941144,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_006.stl"
+  },
+  {
+    "component": "03-75mm 10mm-2",
+    "model_id": 8,
+    "source_path": "C:\\Projects\\机械部分\\03-75mm 10mm.SLDPRT",
+    "link": "outer_frame",
+    "mass_kg": 0.008639379797371931,
+    "mass_basis": "CAD default; hardware mass unverified",
+    "raw_mesh": "part_008.stl"
+  },
+  {
+    "component": "05-电子部分-1",
+    "model_id": 43,
+    "source_path": "C:\\Projects\\机械部分\\05-电子部分.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.09074748193763729,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_043.stl"
+  },
+  {
+    "component": "04-直齿条.step-1",
+    "model_id": 44,
+    "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\04-直齿条.step.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.012338916639239772,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_044.stl"
+  },
+  {
+    "component": "04-舵机齿轮连接-2",
+    "model_id": 45,
+    "source_path": "C:\\Projects\\机械部分\\04-舵机齿轮连接.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.030612397566995825,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_045.stl"
+  },
+  {
+    "component": "06-火箭顶锥-3",
+    "model_id": 46,
+    "source_path": "C:\\Projects\\机械部分\\06-火箭顶锥.SLDPRT",
+    "link": "rocket_body",
+    "mass_kg": 0.2087533379066494,
+    "mass_basis": "PETG nominal density; CAD solid volume",
+    "raw_mesh": "part_046.stl"
+  }
+]

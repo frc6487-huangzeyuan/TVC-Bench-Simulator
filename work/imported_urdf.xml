@@ -1,0 +1,38 @@
+<mujoco model="tvc_bearing_bench">
+  <compiler angle="radian"/>
+
+  <asset>
+    <mesh name="base" content_type="model/stl" file="../meshes/base.stl"/>
+    <mesh name="outer_frame" content_type="model/stl" file="../meshes/outer_frame.stl"/>
+    <mesh name="rocket_body" content_type="model/stl" file="../meshes/rocket_body.stl"/>
+    <mesh name="azimuth_stage" content_type="model/stl" file="../meshes/azimuth_stage.stl"/>
+    <mesh name="thrust_unit" content_type="model/stl" file="../meshes/thrust_unit.stl"/>
+  </asset>
+
+  <worldbody>
+    <body name="base">
+      <inertial pos="-1.4166e-10 -0.00300288 0.156766" quat="0.70711 0.707103 -2.08796e-09 2.08206e-09" mass="1.66968" diaginertia="0.152312 0.145146 0.0564249"/>
+      <geom pos="0 0 0" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.65 0.68 0.72 1" density="0" mesh="base"/>
+      <body name="outer_frame" pos="0 0 0.34" quat="0.997622 0 0.0689261 0">
+        <inertial pos="0.00386403 0 -0.0278301" quat="0.464348 0.464348 -0.533274 0.533274" mass="0.807785" diaginertia="0.0386573 0.0199033 0.0188987"/>
+        <joint name="stand_outer" axis="0 -1 0"/>
+        <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.42 0.46 0.52 1" density="0" mesh="outer_frame"/>
+        <body name="rocket_body" quat="0.99845 -0.0551251 0 -0.00765376">
+          <inertial pos="-0.0104871 -0.00638919 0.0585189" quat="0.686148 0.000254876 -0.0831939 0.722689" mass="0.87481" diaginertia="0.00831273 0.00762484 0.00481451"/>
+          <joint name="stand_inner" axis="0.990498 0 0.137524"/>
+          <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.08 0.43 0.68 1" density="0" mesh="rocket_body"/>
+          <body name="azimuth_stage" pos="0.0117341 0.00815553 -0.0711017">
+            <inertial pos="0.00211037 0.00178912 -0.015432" quat="0.271887 0.596973 -0.385764 0.648757" mass="0.0743663" diaginertia="8.57515e-05 5.48408e-05 5.32179e-05"/>
+            <joint name="tvc_azimuth" range="-3.14159 3.14159" axis="-0.136672 -0.111135 0.984363"/>
+            <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.12 0.16 0.22 1" density="0" mesh="azimuth_stage"/>
+            <body name="thrust_unit" pos="0.00535414 0.00435372 -0.0385624" quat="0.999578 -0.0164128 0.0239489 0.000425036">
+              <inertial pos="0.0060716 0.00315627 -0.0284411" quat="0.25266 0.586396 -0.4033 0.655478" mass="0.180542" diaginertia="0.000940425 0.000512624 0.000508615"/>
+              <joint name="tvc_elevation" range="-0.872665 0.872665" axis="0.56525 -0.82479 -0.014638"/>
+              <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.9 0.4 0.09 1" density="0" mesh="thrust_unit"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

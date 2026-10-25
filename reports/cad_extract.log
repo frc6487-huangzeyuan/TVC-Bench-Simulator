@@ -1,0 +1,49 @@
+SOURCE C:\Projects\机械部分\04-总装配.SLDASM
+MODEL 0 03-2020铝型材300mm.SLDPRT type 1 mesh 608
+MODEL 1 03-框架底部型材.SLDPRT type 1 mesh 608
+MODEL 2 03-立式轴承座222.SLDASM type 2 mesh assembly
+MODEL 3 立式轴承座.STEP.SLDASM type 2 mesh assembly
+MODEL 4 RTWN22_1.STEP.SLDPRT type 1 mesh 776
+MODEL 5 Housing_C-BGHKAX6900ZZ-20_C-BGHKAX6900ZZ-20.STEP.SLDPRT type 1 mesh 1160
+MODEL 6 6900ZZ.STEP.SLDPRT type 1 mesh 6096
+MODEL 7 03-高度型材.SLDPRT type 1 mesh 608
+MODEL 8 03-75mm 10mm.SLDPRT type 1 mesh 152
+MODEL 9 03-框架2.SLDASM type 2 mesh assembly
+MODEL 10 03-400mm.SLDPRT type 1 mesh 608
+MODEL 11 03-260mm.SLDPRT type 1 mesh 608
+MODEL 12 01-单轴电机组装.SLDASM type 2 mesh assembly
+MODEL 13 01-X2212无刷电机.SLDPRT type 1 mesh 1198
+MODEL 14 01-螺旋桨.SLDPRT type 1 mesh 5528
+MODEL 15 01-无刷电机头.SLDPRT type 1 mesh 3292
+MODEL 16 01-双轴舵机臂.SLDPRT type 1 mesh 2090
+MODEL 17 01-M3 20尼龙套.SLDPRT type 1 mesh 328
+MODEL 18 02-L型连接件.SLDPRT type 1 mesh 496
+MODEL 19 03-菱形轴承座222.SLDASM type 2 mesh assembly
+MODEL 20 C-BACA6900ZZ.stp.SLDASM type 2 mesh assembly
+MODEL 21 HOUSING_C-BACA6900ZZ.stp.SLDPRT type 1 mesh 1928
+MODEL 22 BEARING_C-BACA6900ZZ.stp.SLDPRT type 1 mesh 5228
+MODEL 23 01-螺旋桨外壳.SLDPRT type 1 mesh 918
+MODEL 24 main-horn-25T-8holes-3D.step.SLDPRT type 1 mesh 3624
+MODEL 25 02-八边形外壳 150mm.SLDPRT type 1 mesh 2608
+MODEL 26 01-旋转平台.SLDPRT type 1 mesh 2376
+MODEL 27 01-单轴电机支架.SLDPRT type 1 mesh 1008
+MODEL 28 01-单轴舵机.SLDPRT type 1 mesh 4094
+MODEL 29 01-45扭力PWM双轴舵机.SLDASM type 2 mesh assembly
+MODEL 30 ra8-rp8-rx8-series-3D.STEP.SLDASM type 2 mesh assembly
+MODEL 31 ____________.STEP.SLDPRT type 1 mesh 3524
+MODEL 32 ______.step_1.STEP.SLDPRT type 1 mesh 2208
+MODEL 33 3pin____.step_1.STEP.SLDPRT type 1 mesh 512
+MODEL 34 ____-_____1.STEP.SLDPRT type 1 mesh 1516
+MODEL 35 _________1.STEP.SLDPRT type 1 mesh 112
+MODEL 36 ____________-0.STEP.SLDPRT type 1 mesh 3728
+MODEL 37 01-双轴舵机底座.SLDPRT type 1 mesh 2416
+MODEL 38 01-金属主舵盘.SLDPRT type 1 mesh 1442
+MODEL 39 03-10mm光杆 125mm.SLDPRT type 1 mesh 152
+MODEL 40 03-重力模块舵机.SLDASM type 2 mesh assembly
+MODEL 41 04-齿轮.step.SLDPRT type 1 mesh 1400
+MODEL 42 02-连接件.SLDPRT type 1 mesh 468
+MODEL 43 05-电子部分.SLDPRT type 1 mesh 532
+MODEL 44 04-直齿条.step.SLDPRT type 1 mesh 460
+MODEL 45 04-舵机齿轮连接.SLDPRT type 1 mesh 950
+MODEL 46 06-火箭顶锥.SLDPRT type 1 mesh 12386
+DONE 101 components 47 models 59 top-level mates

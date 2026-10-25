@@ -1,0 +1,74 @@
+{
+  "config": {
+    "duration_s": 20.0,
+    "initial_x_deg": 5.0,
+    "initial_y_deg": 0.0,
+    "kp_x": 0.6,
+    "ki_x": 0.0,
+    "kd_x": 0.03,
+    "kp_y": 0.6,
+    "ki_y": 0.0,
+    "kd_y": 0.03,
+    "correction_limit_deg": 15.0,
+    "slew_us": 3.0,
+    "throttle_pct": 20.0,
+    "max_thrust_n": 12.0,
+    "motor_tau_s": 0.08,
+    "servo_tau_s": 0.06,
+    "servo_torque_nm": 1.5,
+    "servo_speed_deg_s": 180.0,
+    "bearing_damping": 0.01,
+    "mass_scale": 1.0,
+    "cg_offset_mm": 0.0,
+    "gyro_noise_dps": 0.03,
+    "accel_noise_g": 0.003,
+    "latency_ms": 5.0,
+    "drop_pct": 0.0,
+    "imu_height_mm": 0.0,
+    "azimuth_trim_deg": 0.0,
+    "use_truth": false,
+    "realtime": true,
+    "seed": 42
+  },
+  "build": {
+    "id": "20261025-212622-21a296",
+    "dll": "D:\\Code\\TVC-Simulation\\work\\controllers\\20261025-212622-21a296\\controller.dll",
+    "fingerprint": "f505f51164e602e16f1893138ee90e8f62db153309d1e694a3d9bfed88b9937b",
+    "files": [
+      {
+        "file": "GimbalControl.h",
+        "sha256": "e53d86955a5ce08f76a61eef69de55c1d44f4c01d7c6323fe1b04d69a410a338"
+      },
+      {
+        "file": "HistoryAttitude.h",
+        "sha256": "8fef2a6ea955b12c6fc2a666721a4e7734d4816f7a642b4a290feeccc46f2cc0"
+      },
+      {
+        "file": "Attitude.h",
+        "sha256": "3e30c418971bd60bdcc29b120d0a1de30f03c8df303216271daa8726c3e84b86"
+      },
+      {
+        "file": "AutoLevelPid.h",
+        "sha256": "dcaa01d69537ee6f97d2123d6dbbd17ff460946351011d44cb18f687abfa00e7"
+      },
+      {
+        "file": "ServoLimits.h",
+        "sha256": "16b756c40d55c05cb9da60cae46eec67ba6b4b82b6219f9337b2e1a2dc95c833"
+      },
+      {
+        "file": "sim_api.h",
+        "sha256": "28c94c5c8b52508bda953e8031b94813171df59fa44d72f7c2bb17b505387a99"
+      },
+      {
+        "file": "sim_controller.cpp",
+        "sha256": "3a6bd41be9907201f9bccc0421730091b2ce2c2c7b24301099205be100cb9ec0"
+      }
+    ],
+    "seconds": 0.615,
+    "compiled_at": "2026-10-25 21:26:23",
+    "scope": "原工程 Attitude + GimbalPid",
+    "adapter": "tvc",
+    "log": "",
+    "project_path": "C:\\Projects\\代码\\TVC_Electronics"
+  }
+}

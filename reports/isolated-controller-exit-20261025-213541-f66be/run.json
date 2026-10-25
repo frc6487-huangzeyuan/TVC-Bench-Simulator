@@ -1,0 +1,54 @@
+{
+  "config": {
+    "duration_s": 1.0,
+    "initial_x_deg": 5,
+    "initial_y_deg": 0,
+    "kp_x": 0.6,
+    "ki_x": 0,
+    "kd_x": 0.03,
+    "kp_y": 0.6,
+    "ki_y": 0,
+    "kd_y": 0.03,
+    "correction_limit_deg": 15,
+    "slew_us": 3,
+    "throttle_pct": 55,
+    "max_thrust_n": 12,
+    "motor_tau_s": 0.08,
+    "servo_tau_s": 0.06,
+    "servo_torque_nm": 1.5,
+    "servo_speed_deg_s": 180,
+    "bearing_damping": 0.01,
+    "mass_scale": 1,
+    "cg_offset_mm": 0,
+    "gyro_noise_dps": 0.03,
+    "accel_noise_g": 0.003,
+    "latency_ms": 5,
+    "drop_pct": 0,
+    "imu_height_mm": 0,
+    "azimuth_trim_deg": 0,
+    "use_truth": false,
+    "realtime": false,
+    "seed": 42
+  },
+  "build": {
+    "id": "20261025-213540-81ca4a",
+    "dll": "D:\\Code\\TVC-Simulation\\work\\controllers\\20261025-213540-81ca4a\\controller.dll",
+    "fingerprint": "10fe0b79bbadaaf22f9e0cff140ff6ff51ccb15d48aabf8ba1be5b6c3a02b4a5",
+    "files": [
+      {
+        "file": "sim_controller.cpp",
+        "sha256": "46f55704254d3bace75226bd32b9e48f5afbbbe80263ed8df9fd6d6b6980e5b4"
+      },
+      {
+        "file": "sim_api.h",
+        "sha256": "28c94c5c8b52508bda953e8031b94813171df59fa44d72f7c2bb17b505387a99"
+      }
+    ],
+    "seconds": 0.241,
+    "compiled_at": "2026-10-25 21:35:41",
+    "scope": "自定义 C++ 仿真接口",
+    "adapter": "custom",
+    "log": "",
+    "project_path": "D:\\Code\\TVC-Simulation\\work\\crash-controller"
+  }
+}

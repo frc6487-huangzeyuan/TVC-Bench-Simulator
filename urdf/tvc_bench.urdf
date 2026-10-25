@@ -1,0 +1,117 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="tvc_bearing_bench">
+  <!--SI units. Two passive bearing axes, two finite-range TVC axes. Hardware masses and servo torque not calibrated.-->
+  <mujoco>
+    <compiler discardvisual="false" fusestatic="false" balanceinertia="false" />
+  </mujoco>
+  <link name="base">
+    <inertial>
+      <origin xyz="-1.41659713998e-10 -0.00300287933285 0.156765780651" rpy="0 0 0" />
+      <mass value="1.6696801447" />
+      <inertia ixx="0.152311867701" ixy="-8.02842029896e-13" ixz="4.22620004089e-11" iyy="0.0564248977728" iyz="8.48817070433e-07" izz="0.145145543224" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/base.stl" scale="1 1 1" />
+      </geometry>
+      <material name="base_material">
+        <color rgba="0.65 0.68 0.72 1" />
+      </material>
+    </visual>
+  </link>
+  <link name="outer_frame">
+    <inertial>
+      <origin xyz="0.00386403091391 -7.8383946077e-17 -0.0278301055879" rpy="0 0 0" />
+      <mass value="0.807785395378" />
+      <inertia ixx="0.020257956207" ixy="7.67411850212e-19" ixz="-0.00255463536002" iyy="0.018898675936" iyz="-8.2670415652e-18" izz="0.0383026412023" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/outer_frame.stl" scale="1 1 1" />
+      </geometry>
+      <material name="outer_frame_material">
+        <color rgba="0.42 0.46 0.52 1" />
+      </material>
+    </visual>
+  </link>
+  <link name="rocket_body">
+    <inertial>
+      <origin xyz="-0.0104871401813 -0.00638919275608 0.0585188775443" rpy="0 0 0" />
+      <mass value="0.874809848988" />
+      <inertia ixx="0.00759079266883" ixy="-7.84079442227e-05" ixz="0.000310782309314" iyy="0.00826048937692" iyz="0.000412357656431" izz="0.0049008019324" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/rocket_body.stl" scale="1 1 1" />
+      </geometry>
+      <material name="rocket_body_material">
+        <color rgba="0.08 0.43 0.68 1" />
+      </material>
+    </visual>
+  </link>
+  <link name="azimuth_stage">
+    <inertial>
+      <origin xyz="0.0021103656296 0.00178911567246 -0.0154319959363" rpy="0 0 0" />
+      <mass value="0.0743663385504" />
+      <inertia ixx="5.49237290143e-05" ixy="1.22086549064e-06" ixz="-4.23202359638e-06" iyy="5.40950435089e-05" iyz="-3.29406838973e-06" izz="8.47913835046e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/azimuth_stage.stl" scale="1 1 1" />
+      </geometry>
+      <material name="azimuth_stage_material">
+        <color rgba="0.12 0.16 0.22 1" />
+      </material>
+    </visual>
+  </link>
+  <link name="thrust_unit">
+    <inertial>
+      <origin xyz="0.00607160176914 0.003156269223 -0.0284410883129" rpy="0 0 0" />
+      <mass value="0.180541567962" />
+      <inertia ixx="0.00052592319163" ixy="1.3064121963e-05" ixz="-7.67752805216e-05" iyy="0.000518491936748" iyz="-5.90226249527e-05" izz="0.000917248096124" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/thrust_unit.stl" scale="1 1 1" />
+      </geometry>
+      <material name="thrust_unit_material">
+        <color rgba="0.9 0.4 0.09 1" />
+      </material>
+    </visual>
+  </link>
+  <joint name="stand_outer" type="continuous">
+    <parent link="base" />
+    <child link="outer_frame" />
+    <origin xyz="0 0 0.34000000298" rpy="-2.30738089305e-17 0.137961551603 -8.98596984675e-19" />
+    <axis xyz="1.66533453694e-16 -1 -5.03385167242e-18" />
+    <dynamics damping="0" friction="0" />
+  </joint>
+  <joint name="stand_inner" type="continuous">
+    <parent link="outer_frame" />
+    <child link="rocket_body" />
+    <origin xyz="0 0 0" rpy="-0.110302856455 -0.000843828572764 -0.0152843999388" />
+    <axis xyz="0.990498390146 1.04230440416e-15 0.137524321912" />
+    <dynamics damping="0" friction="0" />
+  </joint>
+  <joint name="tvc_azimuth" type="revolute">
+    <parent link="rocket_body" />
+    <child link="azimuth_stage" />
+    <origin xyz="0.0117341491358 0.00815553455445 -0.0711017490222" rpy="0 0 0" />
+    <axis xyz="-0.136672398798 -0.11113524638 0.98436254115" />
+    <dynamics damping="0" friction="0" />
+    <limit lower="-3.14159265359" upper="3.14159265359" effort="0" velocity="0.942477796077" />
+  </joint>
+  <joint name="tvc_elevation" type="revolute">
+    <parent link="azimuth_stage" />
+    <child link="thrust_unit" />
+    <origin xyz="0.00535414122292 0.00435372327694 -0.0385624025495" rpy="-0.032835065087 0.0479099783892 6.36448131814e-05" />
+    <axis xyz="0.565250157614 -0.824789662895 -0.014638008694" />
+    <dynamics damping="0" friction="0" />
+    <limit lower="-0.872664625997" upper="0.872664625997" effort="0" velocity="0.706858347058" />
+  </joint>
+</robot>

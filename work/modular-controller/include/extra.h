@@ -1,0 +1,1 @@
+double extra_gain(double);

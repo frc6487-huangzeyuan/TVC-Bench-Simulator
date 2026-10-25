@@ -1,24 +1,22 @@
-# Local configuration and secrets
-.env
-.env.*
-!.env.example
-
-# Build artifacts
-build/
-dist/
-.pio/
-.vscode/
-.idea/
-__pycache__/
-*.pyc
-
-# JavaScript
-node_modules/
-
-# Python environments
+# Python environment and caches
 .venv/
 venv/
+__pycache__/
+*.py[cod]
 
-# OS files
+# Frontend dependencies/build cache
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Local browser runtime data (may contain cookies/login state)
+work/browser-profile/
+
+# Compiled controller snapshots imported from external flight-control projects
+work/controllers/
+
+# Generic local/build artifacts
+*.pdb
+*.ilk
 .DS_Store
 Thumbs.db

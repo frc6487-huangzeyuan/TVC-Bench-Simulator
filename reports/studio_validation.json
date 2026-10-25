@@ -1,0 +1,21 @@
+{
+  "checks": [
+    "initial X/Y lean matches requested body angles",
+    "original C++ PWM affects simulated joint positions",
+    "fixed seed produces identical trajectories",
+    "overall tilt metric stays in 0..180 degrees",
+    "separate custom C++ controller compiles and changes physical trajectory",
+    "invalid C++ produces compiler diagnostics",
+    "source changes invalidate compiled snapshot",
+    "multi-file C++ adapter links declared translation units",
+    "controller process exit preserves error report without stopping the app",
+    "worker starts without a premature exit status",
+    "pause freezes simulation time",
+    "resume and disturbance commands reach worker",
+    "stop persists run parameters and controller hash",
+    "CSV download contains recorded telemetry"
+  ],
+  "passed": 14,
+  "controller_fingerprint": "f505f51164e602e16f1893138ee90e8f62db153309d1e694a3d9bfed88b9937b",
+  "http_run_id": "20261025-213541-14841"
+}

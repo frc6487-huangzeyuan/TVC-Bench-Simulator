@@ -1,0 +1,17 @@
+{
+  "id": "validation-baseline",
+  "status": "failed",
+  "message": "台架已翻转或状态发散，实验结束。",
+  "duration_s": 3.7,
+  "sample_count": 185,
+  "peak_tilt_deg": 246.77559210433978,
+  "rms_tilt_deg": 63.35407863575338,
+  "final_tilt_deg": 246.77559210433978,
+  "settling_time_s": null,
+  "limited_pct": 74.05405405405405,
+  "created_at": "2026-10-25 21:11:24",
+  "controller": "f505f51164e602e16f1893138ee90e8f62db153309d1e694a3d9bfed88b9937b",
+  "scope": "原工程 Attitude + GimbalPid",
+  "mass_calibrated": false,
+  "seed": 42
+}
