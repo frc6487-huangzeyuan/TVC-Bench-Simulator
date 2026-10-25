@@ -1,0 +1,24 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+build/
+dist/
+.pio/
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+
+# JavaScript
+node_modules/
+
+# Python environments
+.venv/
+venv/
+
+# OS files
+.DS_Store
+Thumbs.db
