@@ -10,9 +10,11 @@ def open_window():
             with urllib.request.urlopen(url+'/api/bootstrap',timeout=1) as r:
                 if r.status==200:break
         except Exception:time.sleep(.2)
-    browser=Path(r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe')
-    if browser.exists():
-        subprocess.Popen([str(browser),'--app='+url,'--window-size=1580,1000','--user-data-dir='+str(ROOT/'work/browser-profile')],creationflags=0x08000000)
+    browser=next((p for p in [Path(r'C:\Program Files\Google\Chrome\Application\chrome.exe'),
+        Path(r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'),
+        Path.home()/'AppData/Local/Google/Chrome/Application/chrome.exe'] if p.is_file()),None)
+    if browser:
+        subprocess.Popen([str(browser),'--app='+url,'--window-size=1580,1000','--user-data-dir='+str(ROOT/'work/chrome-profile')],creationflags=0x08000000)
     else:webbrowser.open(url)
 
 if __name__=='__main__':

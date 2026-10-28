@@ -3,13 +3,15 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {STLLoader} from 'three/addons/loaders/STLLoader.js';
 import {RotateCcw,Scan,Grid2X2,Move3D,LoaderCircle} from 'lucide-react';
-import type {Frame,Pose} from './types';
+import type {Frame,Pose,BodyPreview,Triple} from './types';
 
 const colors:Record<string,number>={base:0x76818a,outer_frame:0x4a555e,rocket_body:0x238b94,azimuth_stage:0x29323c,thrust_unit:0xc27d50};
-export default function Scene({frame}:{frame:Frame|null}){
+type Overlay={body:BodyPreview;totalCom:Triple;showInertia:boolean};
+export default function Scene({frame,overlay}:{frame:(Pick<Frame,'pose'|'thrust'>&Partial<Frame>)|null;overlay?:Overlay}){
   const host=useRef<HTMLDivElement>(null),latest=useRef(frame),reset=useRef(()=>{}),gridToggle=useRef(()=>{}),wireToggle=useRef(()=>{});
   const [loading,setLoading]=useState(true),[error,setError]=useState(''),[grid,setGrid]=useState(true),[wire,setWire]=useState(false);
   latest.current=frame;
+  const overlayRef=useRef(overlay);overlayRef.current=overlay;
   useEffect(()=>{
     if(!host.current)return;
     const el=host.current;let disposed=false,animation=0;
@@ -39,6 +41,10 @@ export default function Scene({frame}:{frame:Frame|null}){
     },undefined,()=>{if(!disposed){setError('模型网格读取失败，请检查本地仿真服务。');setLoading(false);}}));
     wireToggle.current=()=>Object.values(meshes).forEach(m=>{(m.material as THREE.MeshStandardMaterial).wireframe=!(m.material as THREE.MeshStandardMaterial).wireframe;});
     const arrow=new THREE.ArrowHelper(new THREE.Vector3(0,0,1),new THREE.Vector3(0,0,.15),.1,0xe4a26e,.015,.008);scene.add(arrow);arrow.visible=false;
+    const center=new THREE.Mesh(new THREE.SphereGeometry(.008,18,12),new THREE.MeshBasicMaterial({color:0xe1ac76,depthTest:false}));center.renderOrder=10;scene.add(center);
+    const total=new THREE.Mesh(new THREE.SphereGeometry(.006,16,12),new THREE.MeshBasicMaterial({color:0x79c6c5,depthTest:false}));total.renderOrder=11;scene.add(total);
+    const ellipsoid=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),new THREE.MeshBasicMaterial({color:0xe1ac76,transparent:true,opacity:.18,wireframe:true,depthTest:false}));ellipsoid.renderOrder=9;scene.add(ellipsoid);
+    const cgAxes=new THREE.AxesHelper(.07);scene.add(cgAxes);
     const resize=new ResizeObserver(()=>{const w=el.clientWidth,h=el.clientHeight;renderer.setSize(w,h);camera.aspect=w/Math.max(h,1);camera.updateProjectionMatrix();});resize.observe(el);
     const draw=()=>{
       if(disposed)return;
@@ -50,12 +56,19 @@ export default function Scene({frame}:{frame:Frame|null}){
         arrow.position.fromArray(f.thrust_origin);
         arrow.setDirection(dir);arrow.setLength(.035+Math.min(f.thrust/12,.8)*.16,.018,.009);
       }
+      const o=overlayRef.current;center.visible=total.visible=cgAxes.visible=!!o;ellipsoid.visible=!!o?.showInertia;
+      if(o){
+        center.position.fromArray(o.body.com_world);total.position.fromArray(o.totalCom);cgAxes.position.copy(center.position);
+        ellipsoid.position.copy(center.position);const q=o.body.inertia_quaternion;ellipsoid.quaternion.set(q[1],q[2],q[3],q[0]);
+        const moments=o.body.inertia_kg_m2,scale=moments.map((v,i)=>Math.sqrt(Math.max(1e-8,2.5*(moments[(i+1)%3]+moments[(i+2)%3]-v)/o.body.mass_kg)));
+        ellipsoid.scale.fromArray(scale);
+      }
       controls.update();renderer.render(scene,camera);animation=requestAnimationFrame(draw);
     };draw();
     return()=>{disposed=true;cancelAnimationFrame(animation);resize.disconnect();controls.dispose();scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());}});renderer.dispose();renderer.domElement.remove();};
   },[]);
   return <div className="scene-wrap"><div className="scene-canvas" ref={host}/>
-    <div className="scene-label"><span className="live-dot"/>物理场景<span className="scene-label-muted">MUJOCO · 1 kHz</span></div>
+    <div className="scene-label"><span className="live-dot"/>{overlay?'质量分布':'物理场景'}<span className="scene-label-muted">{overlay?'COM · INERTIA':'MUJOCO · 1 kHz'}</span></div>
     <div className="scene-tools"><button title="恢复视角" onClick={()=>reset.current()}><RotateCcw size={16}/></button><button title="网格" className={grid?'selected':''} onClick={()=>{gridToggle.current();setGrid(!grid);}}><Grid2X2 size={16}/></button><button title="线框" className={wire?'selected':''} onClick={()=>{wireToggle.current();setWire(!wire);}}><Scan size={16}/></button></div>
     <div className="scene-bottom"><span><Move3D size={14}/>拖动旋转 · 滚轮缩放</span><span>5 个刚体 <i/> 4 个关节 <i/> SI 单位</span></div>
     {loading&&<div className="scene-loading"><LoaderCircle className="spin" size={25}/><span>载入你的台架模型</span></div>}

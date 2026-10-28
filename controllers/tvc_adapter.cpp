@@ -19,6 +19,10 @@ SIM_API void sim_reset(const SimConfig* c){
                  int(c->slew_us),uint32_t(c->max_gap_us)};
   pid.reset(new GimbalPid(p));
 }
+// sim_api v1 可选扩展，仅设置仿真释放前的执行器状态，不修改原飞控源码。
+SIM_API void sim_set_initial_pwm(double azimuth_us,double elevation_us){
+  sent[0]=int(std::lround(azimuth_us));sent[1]=int(std::lround(elevation_us));
+}
 SIM_API int sim_sample(const SimInput* i){
   float g[3],a[3];for(int k=0;k<3;++k){g[k]=float(i->gyro_dps[k]);a[k]=float(i->accel_g[k]);}
   bool ok;
