@@ -3,7 +3,10 @@ import hashlib,json,os,re,shutil,subprocess,time,uuid
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
-DEFAULT_PROJECT=Path(r'C:\Projects\代码\TVC_Electronics')
+SUBMODULE_PROJECT=ROOT/'firmware'/'TVC_Electronics'
+LEGACY_PROJECT=Path(r'C:\Projects\代码\TVC_Electronics')
+# 已保存的工程选择始终优先；全新工作区使用已初始化的飞控子模块。
+DEFAULT_PROJECT=SUBMODULE_PROJECT if (SUBMODULE_PROJECT/'GimbalControl.h').is_file() else LEGACY_PROJECT
 GXX=Path(r'C:\msys64\ucrt64\bin\g++.exe')
 STATE=ROOT/'work/studio_project.json'
 EXTS={'.ino','.h','.hpp','.cpp','.c','.cc'}

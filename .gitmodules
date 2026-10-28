@@ -1,0 +1,3 @@
+[submodule "firmware/TVC_Electronics"]
+	path = firmware/TVC_Electronics
+	url = https://github.com/frc6487-huangzeyuan/TVC-Flight-Controller.git
