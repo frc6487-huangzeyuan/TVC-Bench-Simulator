@@ -157,18 +157,24 @@ def make_model(cfg):
 def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id):
     """固定台架、关闭推力，按真实舵机动力学与指令限速移动到准备位置。"""
     sent=initial_pwm(cfg)
-    # 初始偏角决定方位；舵机正负俯仰等价，因此选离起始方位最近的解。
+    # 按原 PID 的初始比例项计算纠偏向量；I、D 在启动时尚无历史。
+    # 舵机正负俯仰等价，因此选离起始方位最近的解。
     azimuth=cfg.initial_azimuth_deg
-    if build['adapter']=='tvc' and math.hypot(cfg.initial_x_deg,cfg.initial_y_deg)>.15:
-        direction=math.degrees(math.atan2(-cfg.initial_y_deg,-cfg.initial_x_deg))+180
+    elevation=135.
+    vx=max(-cfg.correction_limit_deg,min(cfg.correction_limit_deg,-cfg.kp_x*cfg.initial_x_deg))
+    vy=max(-cfg.correction_limit_deg,min(cfg.correction_limit_deg,-cfg.kp_y*cfg.initial_y_deg))
+    magnitude=min(cfg.correction_limit_deg,math.hypot(vx,vy))
+    if build['adapter']=='tvc' and magnitude>=.15:
+        direction=math.degrees(math.atan2(vy,vx))+180
         options=[direction+180*flip+360*turn for flip in range(2) for turn in range(-2,3)
                  if 0<=direction+180*flip+360*turn<=360]
         azimuth=min(options,key=lambda a:abs(a-cfg.initial_azimuth_deg))
+        elevation+=magnitude if math.cos(math.radians(azimuth-direction))>=0 else -magnitude
     elif build['adapter']!='tvc':azimuth=180
-    goal=[round(500+azimuth*2000/360),1500]
-    target=np.array([(goal[0]-1500)*math.pi/1000+trim,0.])
+    goal=[math.floor(500+azimuth*2000/360+.5),math.floor(500+elevation*2000/270+.5)]
+    target=np.array([(goal[0]-1500)*math.pi/1000+trim,(goal[1]-1500)*math.radians(270)/2000])
     held=data.qpos[:2].copy();limit_s=max(5.,max(abs(goal[i]-sent[i]) for i in range(2))/int(cfg.slew_us)*.01+5.)
-    started=time.perf_counter();tick=0;site=model.site('body_reference').id
+    started=time.perf_counter();tick=0;goal_since=None;site=model.site('body_reference').id
     while data.time<limit_s:
         while True:
             try:cmd=commands.get_nowait()
@@ -193,7 +199,9 @@ def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id):
               'pwm':sent.copy(),'servo_deg':[math.degrees(data.qpos[2]-trim)+180,math.degrees(data.qpos[3])+135],
               'thrust':0.,'rpm':0.,'throttle':0.,'pid':[0.]*6,'limited':True,'gyro':[0.]*3,'accel':[0.]*3,
               'samples':0,'age_ms':0.,'rtf':0.})
-        if sent==goal and np.max(np.abs(data.qpos[2:4]-target))<math.radians(.5) and np.max(np.abs(data.qvel[2:4]))<math.radians(2):
+        # 指令抵达后仍要等待机械响应；小幅修正不能因位置容差而立即释放。
+        if sent==goal and goal_since is None:goal_since=data.time
+        if goal_since is not None and data.time-goal_since>=.25 and np.max(np.abs(data.qpos[2:4]-target))<math.radians(1) and np.max(np.abs(data.qvel[2:4]))<math.radians(2):
             info={'status':'completed','duration_s':data.time,'initial_pwm':initial_pwm(cfg),
                   'target_pwm':goal,'release_servo_deg':[math.degrees(data.qpos[2]-trim)+180,math.degrees(data.qpos[3])+135]}
             data.time=0.;data.qfrc_applied[:]=0;mujoco.mj_forward(model,data)
