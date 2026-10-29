@@ -40,6 +40,7 @@ class Experiment(BaseModel):
     initial_elevation_deg:float=Field(135,ge=85,le=185)
     auto_prepare_servos:bool=True
     control_law:Literal['pid','model']='pid'
+    model_accel_limit_dps2:float=Field(20,ge=3,le=100)
     kp_x:float=Field(.6,ge=0,le=10);ki_x:float=Field(0,ge=0,le=2);kd_x:float=Field(.03,ge=0,le=2)
     kp_y:float=Field(.6,ge=0,le=10);ki_y:float=Field(0,ge=0,le=2);kd_y:float=Field(.03,ge=0,le=2)
     correction_limit_deg:float=Field(15,ge=1,le=50)
@@ -387,6 +388,8 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
     settled=None
     for i in range(max(0,len(tilt)-25)):
         if np.max(tilt[i:])<2 and (len(tilt)-i)>=25:settled=history[i]['time'];break
+    if reason=='completed' and settled is None:
+        message='实验运行结束，但姿态未持续稳定在 ±2° 内。'
     summary={'id':run_id,'status':reason,'message':message,'duration_s':tail.get('time',0),'sample_count':len(history),
       'peak_tilt_deg':float(tilt.max()) if len(tilt) else None,'rms_tilt_deg':float(np.sqrt(np.mean(tilt**2))) if len(tilt) else None,
       'final_tilt_deg':float(tilt[-1]) if len(tilt) else None,'settling_time_s':settled,

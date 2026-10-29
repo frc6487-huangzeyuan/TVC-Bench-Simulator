@@ -1,5 +1,5 @@
 """检查模型配置、C++ 预定位、原生仿真和调参载入的一致性。"""
-import ctypes as ct,json,queue,sys,tempfile,threading
+import copy,ctypes as ct,json,queue,sys,tempfile,threading
 from pathlib import Path
 from types import SimpleNamespace
 ROOT=Path(__file__).resolve().parents[1]
@@ -15,6 +15,8 @@ def main():
     cfg=Experiment(control_law='model',duration_s=2,realtime=False,kp_x=2.56,kp_y=2.56,
                    ki_x=.05,ki_y=.05,kd_x=2,kd_y=2)
     model=model_compensation(cfg)
+    assert model['acceleration_limit']==20
+    assert model_compensation(cfg.model_copy(update={'model_accel_limit_dps2':15}))['acceleration_limit']==15
     assert max(abs(v) for v in model['residual_acceleration_dps2'])<.01
     assert model is model_compensation(cfg.model_copy(update={'initial_x_deg':-5,'seed':654,'kp_x':1}))
     assert model!=model_compensation(cfg.model_copy(update={'throttle_pct':60}))
@@ -48,6 +50,16 @@ def main():
         else:raise AssertionError('different control laws must not share historical gains')
         applied=server.tuning_apply(cfg)
         assert applied['config']['control_law']=='model'
+        # 旧记录未显式保存上限，但标定快照记录了 15；只能用于相同上限。
+        legacy=copy.deepcopy(result)
+        del legacy['request']['experiment']['model_accel_limit_dps2']
+        legacy['model_compensation']=model_compensation(cfg.model_copy(update={'model_accel_limit_dps2':15}))
+        server.tuner=SimpleNamespace(poll=lambda:legacy)
+        try:server.tuning_apply(cfg)
+        except HTTPException as error:assert error.status_code==400
+        else:raise AssertionError('legacy 15 limit must not be applied to a 20 limit experiment')
+        applied=server.tuning_apply(cfg.model_copy(update={'model_accel_limit_dps2':15}))
+        assert applied['config']['model_accel_limit_dps2']==15
     print('PASS model calibration, C++ startup, real simulation, optional ABI, tuning and load compatibility')
 
 

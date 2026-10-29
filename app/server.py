@@ -204,11 +204,19 @@ def tuning_apply(cfg:Experiment,stop_running:bool=False):
         if not build_is_current(build) or build['fingerprint']!=result['build']['fingerprint']:
             raise HTTPException(400,'当前控制器与训练快照不一致，请重新训练。')
         ignored=expected|{'duration_s','initial_x_deg','initial_y_deg','realtime','seed'}
-        if cfg.model_dump(exclude=ignored)!=Experiment(**result['request']['experiment']).model_dump(exclude=ignored):
+        if cfg.control_law=='pid':ignored.add('model_accel_limit_dps2')
+        snapshot=result['request']['experiment'].copy()
+        # 旧模型记录的加速度上限来自标定快照，不能按新默认值重解释。
+        if snapshot.get('control_law')=='model' and 'model_accel_limit_dps2' not in snapshot:
+            snapshot['model_accel_limit_dps2']=(result.get('model_compensation') or {}).get('acceleration_limit',15.)
+        recorded=Experiment(**snapshot)
+        if cfg.control_law=='model' and recorded.control_law=='model' and cfg.model_accel_limit_dps2!=recorded.model_accel_limit_dps2:
+            raise HTTPException(400,f'该记录使用角加速度上限 {recorded.model_accel_limit_dps2:g}°/s²，当前为 {cfg.model_accel_limit_dps2:g}°/s²；请先调整上限或重新训练。')
+        if cfg.model_dump(exclude=ignored)!=recorded.model_dump(exclude=ignored):
             raise HTTPException(400,'模型或控制约束已改变，请用新工况重新训练。')
         if cfg.control_law=='model':
             from .model_control import model_compensation
-            if result.get('model_compensation')!=model_compensation(Experiment(**result['request']['experiment'])):
+            if result.get('model_compensation')!=model_compensation(recorded):
                 raise HTTPException(400,'模型换算标定与训练记录不一致，请重新训练。')
         updated=Experiment(**(cfg.model_dump()|gains))
         if manager.poll()['status'] in ['running','paused','starting']:

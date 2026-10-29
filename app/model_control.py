@@ -56,6 +56,6 @@ def _calibrate(encoded):
     if not np.isfinite(effectiveness).all() or np.linalg.cond(effectiveness)>1e5:
         raise ValueError('当前模型控制效能矩阵接近奇异，不能进行模型换算。')
     return {'bias':bias.tolist(),'gravity':gravity.tolist(),'inverse':np.linalg.inv(effectiveness).tolist(),
-            'effectiveness':effectiveness.tolist(),'acceleration_limit':15.,'force_n':force,
+            'effectiveness':effectiveness.tolist(),'acceleration_limit':cfg.model_accel_limit_dps2,'force_n':force,
             'residual_acceleration_dps2':residual.tolist(),'calibrated_on_hardware':False,
             'branch_reference_deg':135.}
