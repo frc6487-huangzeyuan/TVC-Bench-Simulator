@@ -39,6 +39,7 @@ class Experiment(BaseModel):
     initial_azimuth_deg:float=Field(180,ge=0,le=360)
     initial_elevation_deg:float=Field(135,ge=85,le=185)
     auto_prepare_servos:bool=True
+    control_law:Literal['pid','model']='pid'
     kp_x:float=Field(.6,ge=0,le=10);ki_x:float=Field(0,ge=0,le=2);kd_x:float=Field(.03,ge=0,le=2)
     kp_y:float=Field(.6,ge=0,le=10);ki_y:float=Field(0,ge=0,le=2);kd_y:float=Field(.03,ge=0,le=2)
     correction_limit_deg:float=Field(15,ge=1,le=50)
@@ -106,6 +107,15 @@ def load_native(dll,cfg,start_pwm=None):
     c=NativeConfig((cfg.kp_x,cfg.kp_y),(cfg.ki_x,cfg.ki_y),(cfg.kd_x,cfg.kd_y),
                    3,.03,cfg.correction_limit_deg,(1,1),180,cfg.slew_us,50000,cfg.throttle_pct,int(cfg.use_truth))
     lib.sim_reset(ct.byref(c))
+    if cfg.control_law=='model':
+        from .model_control import model_compensation
+        if not hasattr(lib,'sim_set_model'):
+            raise RuntimeError('当前 C++ 控制器不支持模型换算，请编译更新后的 TVC 飞控源码。')
+        model=model_compensation(cfg)
+        values=(ct.c_double*11)(*model['bias'],*np.array(model['gravity']).ravel(),
+                                *np.array(model['inverse']).ravel(),model['acceleration_limit'])
+        lib.sim_set_model.argtypes=[ct.POINTER(ct.c_double)];lib.sim_set_model.restype=ct.c_int
+        if lib.sim_set_model(values):raise RuntimeError('C++ 控制器拒绝模型换算参数。')
     # 可选 v1 扩展：同步原控制器的已发送 PWM，绝不以复位中位冒充真实初始位置。
     pwm=start_pwm if start_pwm is not None else initial_pwm(cfg)
     if hasattr(lib,'sim_set_initial_pwm'):
@@ -154,7 +164,7 @@ def make_model(cfg):
     data.qpos[1]=math.radians(cfg.initial_y_deg)
     mujoco.mj_forward(model,data);return model,data,trim
 
-def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id):
+def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,controller=None):
     """固定台架、关闭推力，按真实舵机动力学与指令限速移动到准备位置。"""
     sent=initial_pwm(cfg)
     # 按原 PID 的初始比例项计算纠偏向量；I、D 在启动时尚无历史。
@@ -172,6 +182,14 @@ def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id):
         elevation+=magnitude if math.cos(math.radians(azimuth-direction))>=0 else -magnitude
     elif build['adapter']!='tvc':azimuth=180
     goal=[math.floor(500+azimuth*2000/360+.5),math.floor(500+elevation*2000/270+.5)]
+    if build['adapter']=='tvc' and controller is not None and hasattr(controller,'sim_preposition'):
+        # 启动准备和运行共用 C++ 的纠偏向量、模型换算及逆运动学。
+        controller.sim_preposition.argtypes=[ct.c_double,ct.c_double,ct.c_double,ct.POINTER(ct.c_double)]
+        controller.sim_preposition.restype=ct.c_int
+        pwm=(ct.c_double*2)()
+        if controller.sim_preposition(cfg.initial_x_deg,cfg.initial_y_deg,cfg.initial_azimuth_deg,pwm):
+            raise RuntimeError('C++ 舵机预定位解算失败。')
+        goal=[int(pwm[0]),int(pwm[1])]
     target=np.array([(goal[0]-1500)*math.pi/1000+trim,(goal[1]-1500)*math.radians(270)/2000])
     held=data.qpos[:2].copy();limit_s=max(5.,max(abs(goal[i]-sent[i]) for i in range(2))/int(cfg.slew_us)*.01+5.)
     started=time.perf_counter();tick=0;goal_since=None;site=model.site('body_reference').id
@@ -269,10 +287,11 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
     cfg=Experiment(**config);started=time.time();history=[];reason='completed';message='实验完成';preparation=None
     try:
         model,data,trim=make_model(cfg);prepared_pwm=initial_pwm(cfg)
-        if cfg.auto_prepare_servos:
-            prepared_pwm,preparation=prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id)
-            if prepared_pwm is None:raise PreparationStopped()
         lib=load_native(build['dll'],cfg,prepared_pwm)
+        if cfg.auto_prepare_servos:
+            prepared_pwm,preparation=prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,lib)
+            if prepared_pwm is None:raise PreparationStopped()
+            if hasattr(lib,'sim_set_initial_pwm'):lib.sim_set_initial_pwm(*prepared_pwm)
         site=model.site('body_reference').id;thrust_body=model.body('thrust_unit').id
         thrust_site=model.site('thrust_point').id;rocket=model.body('rocket_body').id
         rng=np.random.default_rng(cfg.seed);pending=deque();last_sample_t=0.;samples=0
@@ -343,7 +362,7 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
                 reason='failed';message='轴承转角超过 180°，结束本次姿态稳定测试。';break
             if tick%20==0:
                 truth=lean(data.site_xmat[site].reshape(3,3));elapsed=time.perf_counter()-start_wall
-                packet={'kind':'frame','run_id':run_id,'status':'running','time':round(data.time,6),
+                packet={'kind':'frame','run_id':run_id,'status':'running','time':round(data.time,6),'control_law':cfg.control_law,
                   'pose':poses(model,data),'x':float(truth[0]),'y':float(truth[1]),
                   'thrust_origin':data.site_xpos[thrust_site].tolist(),
                   'thrust_direction':(data.xmat[thrust_body].reshape(3,3)@META['thrust_direction_in_link']).tolist(),
@@ -374,7 +393,11 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
       'limited_pct':100*sum(p['limited'] for p in history)/len(history) if history else 0,
       'created_at':time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(started)),
       'controller':build['fingerprint'],'scope':build['scope'],'mass_calibrated':False,'seed':cfg.seed,
-      'preparation':preparation}
+      'preparation':preparation,'control_law':cfg.control_law,
+      'model_compensation':None}
+    if cfg.control_law=='model' and reason!='error':
+        from .model_control import model_compensation
+        summary['model_compensation']=model_compensation(cfg)
     if record:
         (folder/'run.json').write_text(json.dumps({'config':config,'build':build},ensure_ascii=False,indent=2),encoding='utf-8')
         (folder/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')

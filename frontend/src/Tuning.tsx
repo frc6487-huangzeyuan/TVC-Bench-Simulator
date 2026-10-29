@@ -38,6 +38,7 @@ export default function Tuning({config,state,disabled,available,onState,onApplie
   if(r.initial_x_range)setXRange(r.initial_x_range);if(r.initial_y_range)setYRange(r.initial_y_range);if(r.azimuth_range)setAzRange(r.azimuth_range);if(r.elevation_range)setElRange(r.elevation_range);
   if(r.disturbance_start_range)setPushStart(r.disturbance_start_range);if(r.disturbance_duration_range)setPushDuration(r.disturbance_duration_range);if(r.bounds)setBounds(r.bounds);
  },[state.id,active,!!state.request]);
+ useEffect(()=>{if(!active)setBounds(old=>Object.fromEntries(keys.map(k=>[k,[old[k][0],Math.max(old[k][1],config[k])]])) as Record<Gain,[number,number]>);},[config.control_law,config.kp_x,config.ki_x,config.kd_x,config.kp_y,config.ki_y,config.kd_y,active]);
  const hasCandidate=['completed','stopped'].includes(state.status)&&!!state.evaluated&&!!state.best_gains&&keys.every(k=>Number.isFinite(state.best_gains?.[k]));
  const loadLabel=disabled?'停止实验并载入候选':state.recommended?'载入仿真实验台':'载入候选到实验台';
  const loadReason=active?'请先停止训练':!hasCandidate?'请先训练至少一组参数':!available?'请编译接入当前 TVC 控制器':busy?'操作中':disabled?'结束当前实验后，将候选 PID 保存到仿真配置':'将候选 PID 保存到仿真配置';

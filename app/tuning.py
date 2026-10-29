@@ -38,6 +38,16 @@ class TuningRequest(BaseModel):
     seed:int=Field(42,ge=0,le=2**31-1)
     bounds:dict[str,tuple[float,float]]=Field(default_factory=lambda:dict(DEFAULT_BOUNDS))
 
+    @model_validator(mode='before')
+    @classmethod
+    def model_gain_bounds(cls,data):
+        if isinstance(data,dict) and 'bounds' not in data:
+            cfg=data.get('experiment',{})
+            law=cfg.get('control_law') if isinstance(cfg,dict) else getattr(cfg,'control_law',None)
+            if law=='model':
+                data=dict(data,bounds={k:(0.,3. if k.startswith('kp') else 2. if k.startswith('kd') else .5) for k in GAINS})
+        return data
+
     @model_validator(mode='after')
     def check_bounds(self):
         if self.optimize_limit:
@@ -320,6 +330,9 @@ def train(request_data,build,training_id,outbox,event):
     def publish():
         save_result(folder,result);outbox.put(copy.deepcopy(result))
     try:
+        if request.experiment.control_law=='model':
+            from .model_control import model_compensation
+            result['model_compensation']=model_compensation(request.experiment)
         publish();baseline={k:getattr(request.experiment,k) for k in search_keys(request)}
         best=evaluate(request,build,baseline,event,outbox);result['baseline']=best
         result['best']=best;result['best_gains']=baseline;publish()

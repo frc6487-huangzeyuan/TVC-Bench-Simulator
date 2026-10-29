@@ -6,6 +6,7 @@
 static std::unique_ptr<GimbalPid> pid;
 static Attitude attitude;
 static SimConfig settings;
+static GimbalConfig pidConfig;
 static int sent[2] = {1500,1500};
 static float previous_gyro[3]={0,0,0};
 SIM_API int sim_abi_version(){return 1;}
@@ -17,7 +18,32 @@ SIM_API void sim_reset(const SimConfig* c){
                  float(c->correction_limit),float(c->integral_limit),float(c->derivative_filter),
                  float(c->azimuth_zero),float(c->sign[0]),float(c->sign[1]),
                  int(c->slew_us),uint32_t(c->max_gap_us)};
-  pid.reset(new GimbalPid(p));
+  pidConfig=p;pid.reset(new GimbalPid(p));
+}
+#ifdef TVC_MODEL_COMPENSATION_API
+// 可选 sim_api v1 扩展。参数只来自本次仿真模型，不自动写入真实飞控。
+SIM_API int sim_set_model(const double *values){
+  auto &m=pidConfig.model;m.enabled=true;
+  for(int k=0;k<2;++k)m.bias[k]=float(values[k]);
+  for(int k=0;k<4;++k){m.gravity[k]=float(values[2+k]);m.inverse[k]=float(values[6+k]);}
+  m.accelerationLimit=float(values[10]);
+  pid.reset(new GimbalPid(pidConfig));return pid->configurationValid()?0:-1;
+}
+#endif
+SIM_API int sim_preposition(double x,double y,double current_azimuth,double *pwm){
+  float vx,vy,azimuth,elevation;
+#ifdef TVC_MODEL_COMPENSATION_API
+  GimbalPid::initialVector(pidConfig,float(x),float(y),vx,vy);
+#else
+  vx=pidConfig.signX*std::max(-pidConfig.limit,std::min(pidConfig.limit,-pidConfig.x.kp*float(x)));
+  vy=pidConfig.signY*std::max(-pidConfig.limit,std::min(pidConfig.limit,-pidConfig.y.kp*float(y)));
+  const float magnitude=std::hypot(vx,vy);
+  if(magnitude>pidConfig.limit){vx*=pidConfig.limit/magnitude;vy*=pidConfig.limit/magnitude;}
+#endif
+  if(!std::isfinite(vx)||!std::isfinite(vy))return -1;
+  GimbalPid::vectorToAngles(vx,vy,float(current_azimuth),pidConfig.azimuthZero,azimuth,elevation);
+  pwm[0]=limitServoUs(0,GimbalPid::angleToUs(azimuth,0));
+  pwm[1]=limitServoUs(1,GimbalPid::angleToUs(elevation,1));return 0;
 }
 // sim_api v1 可选扩展，仅设置仿真释放前的执行器状态，不修改原飞控源码。
 SIM_API void sim_set_initial_pwm(double azimuth_us,double elevation_us){

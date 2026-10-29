@@ -206,6 +206,10 @@ def tuning_apply(cfg:Experiment,stop_running:bool=False):
         ignored=expected|{'duration_s','initial_x_deg','initial_y_deg','realtime','seed'}
         if cfg.model_dump(exclude=ignored)!=Experiment(**result['request']['experiment']).model_dump(exclude=ignored):
             raise HTTPException(400,'模型或控制约束已改变，请用新工况重新训练。')
+        if cfg.control_law=='model':
+            from .model_control import model_compensation
+            if result.get('model_compensation')!=model_compensation(Experiment(**result['request']['experiment'])):
+                raise HTTPException(400,'模型换算标定与训练记录不一致，请重新训练。')
         updated=Experiment(**(cfg.model_dump()|gains))
         if manager.poll()['status'] in ['running','paused','starting']:
             if not stop_running:raise HTTPException(400,'实验正在运行，请使用“停止实验并载入候选”。')
