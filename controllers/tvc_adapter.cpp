@@ -34,6 +34,7 @@ SIM_API int sim_preposition(double x,double y,double current_azimuth,double *pwm
   float vx,vy,azimuth,elevation;
 #ifdef TVC_MODEL_COMPENSATION_API
   GimbalPid::initialVector(pidConfig,float(x),float(y),vx,vy);
+  current_azimuth=GimbalPid::initialAzimuthReference(pidConfig,float(current_azimuth),vx,vy);
 #else
   vx=pidConfig.signX*std::max(-pidConfig.limit,std::min(pidConfig.limit,-pidConfig.x.kp*float(x)));
   vy=pidConfig.signY*std::max(-pidConfig.limit,std::min(pidConfig.limit,-pidConfig.y.kp*float(y)));
