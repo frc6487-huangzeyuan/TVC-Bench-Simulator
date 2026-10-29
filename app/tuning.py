@@ -1,10 +1,11 @@
-"""仅仿真：有界高斯策略的回合式 REINFORCE，学习六个固定 PID 增益。
+"""仅仿真：差分进化或有界 REINFORCE 搜索固定 PID 参数。
 
 每次动作选一组参数，回合内部仍由原 C++ PID 闭环控制。属于单步回合
 （连续动作 bandit），不是逐控制周期自适应 PID，也不是 PPO。
 """
 import copy,json,math,multiprocessing as mp,queue,threading,time,traceback,uuid
 from pathlib import Path
+from typing import Literal
 import numpy as np
 from pydantic import BaseModel,ConfigDict,Field,model_validator
 from .simulation import ROOT,Experiment,run_experiment,synchronized
@@ -16,6 +17,9 @@ ACTIVE={'starting','running','stopping'}
 class TuningRequest(BaseModel):
     model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
     experiment:Experiment
+    algorithm:Literal['de','rl']='de'
+    optimize_limit:bool=False
+    limit_bounds:tuple[float,float]=(3,25)
     iterations:int=Field(8,ge=1,le=50)
     batch_size:int=Field(6,ge=4,le=32)
     episode_s:float=Field(10,ge=1,le=30)
@@ -36,6 +40,11 @@ class TuningRequest(BaseModel):
 
     @model_validator(mode='after')
     def check_bounds(self):
+        if self.optimize_limit:
+            if self.algorithm!='de':raise ValueError('最大修正角搜索仅支持差分进化。')
+            lo,hi=self.limit_bounds
+            if not 3<=lo<hi<=50 or not lo<=self.experiment.correction_limit_deg<=hi:
+                raise ValueError('最大修正角搜索范围须在 3～50° 内，并包含当前值。')
         for name,minimum,maximum in [('initial_x_range',-30,30),('initial_y_range',-30,30),
                                      ('azimuth_range',0,360),('elevation_range',85,185),
                                      ('disturbance_start_range',.01,30),('disturbance_duration_range',.02,2)]:
@@ -127,8 +136,18 @@ def episode_metrics(summary,history,duration):
     # 成功要求最后一秒持续小于 2°；仅完成时长不等于稳定。
     tail=tilt[times>=max(0,duration-1)]
     stabilized=not failed and len(tail)>=40 and bool(np.all(tail<2))
+    tail_peak=float(np.max(tail)) if len(tail) else float(tilt[-1])
     cost=iae/duration+float(tilt[-1])*.3+.002*variation+2*limited+(100 if failed else 0)+(0 if stabilized else 10)
-    return {'cost':cost,'reward':-cost,'rms_tilt_deg':rms,'iae_deg_s':iae,
+    # 满分 100：正常运行时综合全过程倾角、最后一秒峰值、受限和动作量。
+    # 提前倒下仅按运行比例给 0–20 分，避免短暂运行因为误差积分少而占便宜。
+    observed=max(float(times[-1]),1e-9);mean_tilt=float(np.sum(dt*tilt)/observed)
+    if failed:
+        reward=20*min(observed/duration,1)*math.exp(-mean_tilt/90)
+    else:
+        reward=(40*math.exp(-mean_tilt/10)+30*math.exp(-tail_peak/5)+
+                20*(1-limited)+10*math.exp(-variation/120))
+    return {'cost':cost,'reward':reward,'mean_tilt_deg':mean_tilt,'survival_pct':100*min(observed/duration,1),
+            'tail_peak_deg':tail_peak,'rms_tilt_deg':rms,'iae_deg_s':iae,
             'final_tilt_deg':float(tilt[-1]),'peak_tilt_deg':float(tilt.max()),
             'pwm_variation_us_s':variation,'limited_pct':100*limited,'failed':failed,'stabilized':stabilized,
             'settling_time_s':summary['settling_time_s'],'preparation':summary.get('preparation')}
@@ -202,21 +221,64 @@ def evaluate(request,build,gains,event,outbox,validation=False,selection=False,p
                                              'thrust_origin','thrust_direction','pose')} for p in sampled])
         if progress is not None:progress(index+1,len(suite))
     aggregate={k:float(np.mean([m[k] for m in metrics])) for k in
-               ['cost','reward','rms_tilt_deg','iae_deg_s','final_tilt_deg','peak_tilt_deg','pwm_variation_us_s','limited_pct']}
+               ['cost','reward','mean_tilt_deg','survival_pct','tail_peak_deg','rms_tilt_deg','iae_deg_s','final_tilt_deg','peak_tilt_deg','pwm_variation_us_s','limited_pct']}
     settled=[m['settling_time_s'] for m in metrics]
     stable_count=sum(m['stabilized'] for m in metrics)
     failed_durations=[m['duration_s'] for m in metrics if m['failed']]
+    tail_count=max(1,math.ceil(len(metrics)*.1))
+    tail_cost=float(np.mean(sorted((m['cost'] for m in metrics),reverse=True)[:tail_count]))
+    tail_reward=float(np.mean(sorted(m['reward'] for m in metrics)[:tail_count]))
     return aggregate|{'failed':any(m['failed'] for m in metrics),'failed_count':sum(m['failed'] for m in metrics),
                        'stable_count':stable_count,'case_count':len(metrics),'stable_pct':100*stable_count/len(metrics),
                        'mean_failure_time_s':float(np.mean(failed_durations)) if failed_durations else None,
-                       'worst_cost':max(m['cost'] for m in metrics),'cases':metrics,'curves':curves,
+                       'worst_cost':max(m['cost'] for m in metrics),'tail_cost':tail_cost,'tail_reward':tail_reward,'cases':metrics,'curves':curves,
                        'settling_time_s':float(np.mean(settled)) if all(v is not None for v in settled) else None}
 
 def ranking(score):
     # 固定同一工况集：先提高达标数量，再减少失稳次数；失稳数量相同时，
     # 优先让失败工况坚持更久，最后才比较整体和最差成本。
     failure_time=score['mean_failure_time_s'] if score['mean_failure_time_s'] is not None else 0.
-    return (-score['stable_count'],score['failed_count'],-failure_time,score['cost'],score['worst_cost'])
+    return (-score['stable_count'],score['failed_count'],-failure_time,-score['reward'],score['worst_cost'])
+
+
+def robust_ranking(score):
+    """先比较失稳数，其次最差 10% 的平均得分，再比较全体得分。"""
+    return (score['failed_count'],-score['tail_reward'],-score['reward'],-score['stable_count'])
+
+
+def search_keys(request):
+    return GAINS+(('correction_limit_deg',) if request.optimize_limit else ())
+
+
+class DifferentialEvolution:
+    """标准 DE/rand/1/bin；归一化参数、固定种子，按多工况排序选择。"""
+    def __init__(self,request,rng,baseline):
+        self.keys=search_keys(request);self.rng=rng
+        bounds=[request.limit_bounds if k=='correction_limit_deg' else request.bounds[k] for k in self.keys]
+        self.low=np.array([b[0] for b in bounds]);self.high=np.array([b[1] for b in bounds])
+        n=request.batch_size;self.population=np.empty((n,len(self.keys)))
+        for axis in range(len(self.keys)):
+            self.population[:,axis]=(rng.permutation(n)+rng.random(n))/n
+        self.population[0]=np.array([(baseline[k]-lo)/(hi-lo) for k,lo,hi in zip(self.keys,self.low,self.high)])
+        # 一半种群在当前参数附近探索，另一半分层覆盖范围；避免可用基线被全局随机点淹没。
+        local_count=n//2
+        if local_count>1:
+            self.population[1:local_count]=np.clip(self.population[0]+rng.normal(0,.12,(local_count-1,len(self.keys))),0,1)
+        self.scores=[None]*n
+
+    def gains(self,vector):
+        return {k:float(v) for k,v in zip(self.keys,self.low+np.asarray(vector)*(self.high-self.low))}
+
+    def trial(self,index):
+        others=np.delete(np.arange(len(self.population)),index)
+        a,b,c=self.rng.choice(others,3,replace=False)
+        mutant=np.clip(self.population[a]+.8*(self.population[b]-self.population[c]),0,1)
+        mask=self.rng.random(len(self.keys))<.9;mask[self.rng.integers(len(self.keys))]=True
+        return np.where(mask,mutant,self.population[index])
+
+    def accept(self,index,vector,score):
+        if self.scores[index] is None or robust_ranking(score)<robust_ranking(self.scores[index]):
+            self.population[index]=vector;self.scores[index]=score
 
 
 def reference_regressed(baseline,candidate):
@@ -251,37 +313,43 @@ def save_result(folder,result):
 def train(request_data,build,training_id,outbox,event):
     request=TuningRequest(**request_data);folder=ROOT/'tuning'/training_id;folder.mkdir(parents=True)
     result={'id':training_id,'status':'running','phase':'评估原始参数','message':'正在建立仿真基线',
-            'algorithm':'REINFORCE · 对称局部探索 / 固定 PID','request':request.model_dump(mode='json'),
+            'algorithm':('差分进化 · 多工况鲁棒搜索' if request.algorithm=='de' else 'REINFORCE · 对称局部探索 / 固定 PID'),'request':request.model_dump(mode='json'),
             'build':build,'history':[],'iteration':0,'evaluated':0,
-            'total':request.iterations*request.batch_size,'mass_calibrated':False,'recommended':False,
+            'total':request.iterations*request.batch_size,'reward_version':2,'mass_calibrated':False,'recommended':False,
             'created_at':time.strftime('%Y-%m-%d %H:%M:%S')}
     def publish():
         save_result(folder,result);outbox.put(copy.deepcopy(result))
     try:
-        publish();baseline={k:getattr(request.experiment,k) for k in GAINS}
+        publish();baseline={k:getattr(request.experiment,k) for k in search_keys(request)}
         best=evaluate(request,build,baseline,event,outbox);result['baseline']=best
         result['best']=best;result['best_gains']=baseline;publish()
-        policy=GaussianPolicy(request);rng=np.random.default_rng(request.seed);candidates=[]
+        rng=np.random.default_rng(request.seed);candidates=[]
+        score_rank=robust_ranking if request.algorithm=='de' else ranking
+        policy=GaussianPolicy(request) if request.algorithm=='rl' else DifferentialEvolution(request,rng,baseline)
         for iteration in range(request.iterations):
-            # 同一批动作来自同一个策略；回报到齐后才更新，不把随机搜索标为 RL。
-            noise,latent=policy.proposals(rng,request.batch_size,iteration)
-            scores=[];batch_stable=0;result['phase']='训练策略';result['iteration']=iteration+1
-            for action in latent:
+            # RL 批量更新策略；DE 第一代分层采样，后续逐个变异、交叉并择优保留。
+            if request.algorithm=='rl':noise,latent=policy.proposals(rng,request.batch_size,iteration)
+            scores=[];batch_stable=0;result['phase']='差分进化搜索' if request.algorithm=='de' else '训练策略';result['iteration']=iteration+1
+            for index in range(request.batch_size):
+                action=(policy.population[index].copy() if iteration==0 else policy.trial(index)) if request.algorithm=='de' else latent[index]
                 gains=policy.gains(action);score=evaluate(request,build,gains,event,outbox);scores.append(score)
+                if request.algorithm=='de':policy.accept(index,action,score)
                 batch_stable=max(batch_stable,score['stable_count'])
                 result['evaluated']+=1
-                candidates.append((ranking(score),gains))
-                if ranking(score)<ranking(result['best']):
+                candidates.append((score_rank(score),gains))
+                if score_rank(score)<score_rank(result['best']):
                     result['best']=score;result['best_gains']=gains
                 result['history'].append({'episode':result['evaluated'],'iteration':iteration+1,
                     'reward':score['reward'],'best_reward':result['best']['reward'],'gains':gains,'failed':score['failed'],
                     'stable_count':score['stable_count'],'failed_count':score['failed_count'],'case_count':score['case_count'],
-                    'mean_failure_time_s':score['mean_failure_time_s']})
+                    'mean_failure_time_s':score['mean_failure_time_s'],'tail_cost':score['tail_cost'],'tail_reward':score['tail_reward']})
                 result['message']=f"已评估 {result['evaluated']} / {result['total']} 组 PID（每组 {request.training_cases} 个工况）"
                 publish()
-            policy.update(noise,policy_utilities(scores),request.learning_rate)
-            if batch_stable==0:policy.widen_if_no_stable()
-            result['policy']=policy.snapshot();publish()
+            if request.algorithm=='rl':
+                policy.update(noise,policy_utilities(scores),request.learning_rate)
+                if batch_stable==0:policy.widen_if_no_stable()
+                result['policy']=policy.snapshot()
+            publish()
         # 短回合筛选不等于长时间可用：在独立于最终验证的种子/扰动下
         # 比较基线与多组前列候选，选择全时长表现最好的参数。
         result['phase']='完整时长筛选';result['message']='正在用新种子筛选多组候选';publish()
@@ -290,7 +358,7 @@ def train(request_data,build,training_id,outbox,event):
         chosen_gains=baseline;chosen=screen_base;screen=[];seen=set()
         shortlist=[]
         for _,gains in sorted(candidates,key=lambda row:row[0]):
-            key=tuple(round(gains[k],10) for k in GAINS)
+            key=tuple(round(gains[k],10) for k in search_keys(request))
             if key not in seen:seen.add(key);shortlist.append(gains)
             if len(shortlist)>=8:break
         for index,gains in enumerate(shortlist):
@@ -299,9 +367,9 @@ def train(request_data,build,training_id,outbox,event):
             regressed=reference_regressed(reference_base,reference)
             screen.append({'gains':gains,'cost':score['cost'],'failed':score['failed'],
                            'stable_count':score['stable_count'],'failed_count':score['failed_count'],'case_count':score['case_count'],
-                           'mean_failure_time_s':score['mean_failure_time_s'],
+                           'mean_failure_time_s':score['mean_failure_time_s'],'tail_cost':score['tail_cost'],'tail_reward':score['tail_reward'],
                            'reference_regressed':regressed})
-            if not regressed and ranking(score)<ranking(chosen):
+            if not regressed and score_rank(score)<score_rank(chosen):
                 chosen_gains=gains;chosen=score
             result['message']=f'完整时长筛选 {index+1} / {len(shortlist)} 组候选';publish()
         result['selection']={'baseline':screen_base,'candidate':chosen,'candidates':screen}
@@ -326,7 +394,7 @@ def train(request_data,build,training_id,outbox,event):
         result['validation']={'baseline':base_validation,'candidate':best_validation,'improvement_pct':improvement}
         result['comparison_available']=True
         result['recommended']=(best_validation['stable_count']==best_validation['case_count'] and
-                               (best_validation['stable_count']>base_validation['stable_count'] or improvement>0.01))
+                               score_rank(best_validation)<score_rank(base_validation))
         result['status']='completed';result['phase']='训练完成'
         if result['recommended']:
             result['message']=f"独立验证 {best_validation['stable_count']} / {best_validation['case_count']} 个工况稳定，并优于原参数"

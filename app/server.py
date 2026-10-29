@@ -72,7 +72,7 @@ def save_adapter(body:AdapterRequest):
 @app.post('/api/simulation/start')
 def start(cfg:Experiment):
     with execution_lock:
-        if tuner.poll()['status'] in ACTIVE:raise HTTPException(400,'请先停止强化学习训练，再开始实验。')
+        if tuner.poll()['status'] in ACTIVE:raise HTTPException(400,'请先停止参数优化，再开始实验。')
         state=current_project()
         if not build_is_current(state.get('build')):raise HTTPException(400,'源码尚未编译，或编译后已有改动。请先编译接入当前工程。')
         result=wrap_error(lambda:manager.start(cfg,state['build']))
@@ -197,12 +197,13 @@ def tuning_apply(cfg:Experiment,stop_running:bool=False):
         result=tuner.poll()
         if result['status'] in ACTIVE:raise HTTPException(400,'请先停止训练，再载入候选参数。')
         gains=result.get('best_gains')
-        if result['status'] not in ['completed','stopped'] or not result.get('evaluated') or not isinstance(gains,dict) or set(gains)!=set(GAINS):
+        expected=set(GAINS)|({'correction_limit_deg'} if result.get('request',{}).get('optimize_limit') else set())
+        if result['status'] not in ['completed','stopped'] or not result.get('evaluated') or not isinstance(gains,dict) or set(gains)!=expected:
             raise HTTPException(400,'尚无已评估的候选参数可载入。请先训练至少一组参数。')
         state=current_project();build=state.get('build')
         if not build_is_current(build) or build['fingerprint']!=result['build']['fingerprint']:
             raise HTTPException(400,'当前控制器与训练快照不一致，请重新训练。')
-        ignored=set(GAINS)|{'duration_s','initial_x_deg','initial_y_deg','realtime','seed'}
+        ignored=expected|{'duration_s','initial_x_deg','initial_y_deg','realtime','seed'}
         if cfg.model_dump(exclude=ignored)!=Experiment(**result['request']['experiment']).model_dump(exclude=ignored):
             raise HTTPException(400,'模型或控制约束已改变，请用新工况重新训练。')
         updated=Experiment(**(cfg.model_dump()|gains))
