@@ -38,9 +38,9 @@
   </link>
   <link name="rocket_body">
     <inertial>
-      <origin xyz="-0.0104871401813 -0.00638919275608 0.0585188775443" rpy="0 0 0" />
-      <mass value="0.874809848988" />
-      <inertia ixx="0.00759079266883" ixy="-7.84079442227e-05" ixz="0.000310782309314" iyy="0.00826048937692" iyz="0.000412357656431" izz="0.0049008019324" />
+      <origin xyz="-0.00840272158426 -0.00684483342409 0.0619180050811" rpy="0 0 0" />
+      <mass value="0.804738394382" />
+      <inertia ixx="0.00744264762787" ixy="-8.65433177601e-05" ixz="0.000383228130994" iyy="0.00807135165304" iyz="0.000391532768041" izz="0.00482505322739" />
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -84,6 +84,22 @@
       </material>
     </visual>
   </link>
+  <link name="balance_carriage">
+    <inertial>
+      <origin xyz="0.00253516547997 0.00323026680239 -0.010447506353" rpy="0 0 0" />
+      <mass value="0.0700714546052" />
+      <inertia ixx="2.99779673204e-05" ixy="-1.40652231768e-06" ixz="-1.26227018479e-06" iyy="2.94051531704e-05" iyz="5.26461609116e-06" izz="3.00116122612e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/balance_carriage.stl" scale="1 1 1" />
+      </geometry>
+      <material name="balance_carriage_material">
+        <color rgba="0.9 0.73 0.28 1" />
+      </material>
+    </visual>
+  </link>
   <joint name="stand_outer" type="continuous">
     <parent link="base" />
     <child link="outer_frame" />
@@ -113,5 +129,13 @@
     <axis xyz="0.565250157614 -0.824789662895 -0.014638008694" />
     <dynamics damping="0" friction="0" />
     <limit lower="-0.872664625997" upper="0.872664625997" effort="0" velocity="0.706858347058" />
+  </joint>
+  <joint name="cg_slide" type="prismatic">
+    <parent link="rocket_body" />
+    <child link="balance_carriage" />
+    <origin xyz="-0.0369608935559 -0.00438663626895 0.0299289691368" rpy="0 0 0" />
+    <axis xyz="-0.990498390146 -8.79496495662e-16 -0.137524321912" />
+    <dynamics damping="0" friction="0" />
+    <limit lower="-0.091" upper="0.027" effort="0" velocity="0" />
   </joint>
 </robot>

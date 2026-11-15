@@ -22,7 +22,7 @@ async def device_info():
 
 
 def allowed_local_origin(ws:WebSocket):
-    return ws.headers.get('origin') in ('http://127.0.0.1:8765','http://localhost:8765')
+    return ws.headers.get('origin') in ('http://127.0.0.1:18767','http://localhost:18767')
 
 
 async def proxy_device(ws:WebSocket):

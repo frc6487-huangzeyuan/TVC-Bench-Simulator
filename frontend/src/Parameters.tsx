@@ -4,7 +4,7 @@ import {CartesianGrid,Line,LineChart,ReferenceLine,ResponsiveContainer,Tooltip,X
 import Scene from './Scene';
 import type {BodyName,BodyOverride,Config,ParameterPreview,ThrustPoint,Triple} from './types';
 
-const names:Record<BodyName,string>={outer_frame:'轴承内框',rocket_body:'箭体',azimuth_stage:'方位机构',thrust_unit:'推力组件'};
+const names:Record<BodyName,string>={outer_frame:'轴承内框',rocket_body:'箭体固定部分',azimuth_stage:'方位机构',thrust_unit:'推力组件',balance_carriage:'重心滑架'};
 const f=(n:number,d=3)=>n.toLocaleString('en-US',{maximumFractionDigits:d});
 const tooltip={background:'#222b33',border:'1px solid #3c4853',borderRadius:8,fontSize:11};
 
@@ -77,13 +77,14 @@ export default function Parameters({config,onChange,disabled,onBack,onSaved}:{co
    <section className="parameter-card panel"><div className="parameter-title"><div><Scale size={17}/><h2>质量、惯量与重心</h2></div><span>MASS PROPERTIES</span></div>
     <div className="body-selector">{(Object.keys(names) as BodyName[]).map(name=><button key={name} className={selected===name?'active':''} onClick={()=>setSelected(name)}>{names[name]}</button>)}</div>
     {body&&<><div className="body-summary"><span>{names[selected]}<small>{selected}</small></span><button className="text-button" onClick={()=>{const next={...config.body_overrides};delete next[selected];change({...config,body_overrides:next});}}><RotateCcw size={13}/>恢复该刚体</button></div>
-     <Adjust label={`${names[selected]}质量`} value={override.mass_kg??body.mass_kg} unit="kg" min={.001} max={Math.max(10,(base?.mass_kg||1)*5)} step={.001} onChange={v=>setBody({mass_kg:v})}/>
+     <Adjust label={selected==='balance_carriage'?'滑架本体质量':`${names[selected]}质量`} value={override.mass_kg??(body.mass_kg-(selected==='balance_carriage'?config.cg_ballast_g/1000:0))} unit="kg" min={.001} max={Math.max(10,(base?.mass_kg||1)*5)} step={.001} onChange={v=>setBody({mass_kg:v})}/>
+     {selected==='balance_carriage'&&<p className="parameter-help">实验台另加 {f(config.cg_ballast_g,0)} g 配重，按滑架质心处的集中质量计算。</p>}
      <div className="parameter-subtitle">质心处主惯量 <small>kg·m² · CAD 惯性主轴</small></div><p className="parameter-help">未覆盖时随质量同比缩放；输入后独立生效。三项须满足三角不等式。</p>
      <div className="inertia-inputs">{inertia?.map((v,i)=><Adjust key={i} label={`主惯量 I${i+1}`} value={v} unit="kg·m²" min={.00000001} max={Math.max(.02,(base?.inertia_kg_m2[i]||.01)*5)} step={.000001} onChange={value=>{const next=[...inertia] as Triple;next[i]=value;setBody({inertia_kg_m2:next});}}/>)}</div><button className="text-button" onClick={()=>{const next={...override};delete next.inertia_kg_m2;change({...config,body_overrides:{...config.body_overrides,[selected]:next}});}}>恢复按质量缩放的惯量<ChevronRight size={13}/></button>
      <div className="parameter-subtitle">重心偏移 <small>mm · 零位机体系 X / Y / Z</small></div><div className="cg-controls">{(['X','Y','Z'] as const).map((axis,i)=><Adjust key={axis} label={`重心 ${axis} 偏移`} value={override.cg_offset_mm?.[i]??0} unit="mm" min={-200} max={200} step={1} onChange={v=>{const next=[...(override.cg_offset_mm||[0,0,0])] as Triple;next[i]=v;setBody({cg_offset_mm:next});}}/>)}</div>
      <p className="parameter-footnote">偏移相对基准 CAD 质心，以箭头方向为 +Z。仅移动质量分布，不移动网格。惯量定义在质心处；转轴惯量由物理引擎计入平行轴效应。</p>
     </>}
-    <details><summary>整体倍率与其他参数</summary><div className="parameter-grid"><Adjust label="原有质量倍率" value={config.mass_scale} unit="×" min={.1} max={5} step={.05} onChange={v=>change({...config,mass_scale:v})}/><Adjust label="原有箭体轴向偏移" value={config.cg_offset_mm} unit="mm" min={-100} max={100} step={1} onChange={v=>change({...config,cg_offset_mm:v})}/><Adjust label="轴承阻尼" value={config.bearing_damping} unit="N·m·s" min={0} max={1} step={.001} onChange={v=>change({...config,bearing_damping:v})}/></div><p className="parameter-help">质量倍率作用于箭体和 TVC 两个刚体。单体质量覆盖优先；原有轴向偏移与三轴偏移叠加。</p></details>
+    <details><summary>整体倍率与其他参数</summary><div className="parameter-grid"><Adjust label="原有质量倍率" value={config.mass_scale} unit="×" min={.1} max={5} step={.05} onChange={v=>change({...config,mass_scale:v})}/><Adjust label="原有箭体轴向偏移" value={config.cg_offset_mm} unit="mm" min={-100} max={100} step={1} onChange={v=>change({...config,cg_offset_mm:v})}/><Adjust label="轴承阻尼" value={config.bearing_damping} unit="N·m·s" min={0} max={1} step={.001} onChange={v=>change({...config,bearing_damping:v})}/></div><p className="parameter-help">质量倍率作用于箭体、重心滑架和 TVC 组件。单体质量覆盖优先；原有轴向偏移与三轴偏移叠加。</p></details>
    </section>
   </fieldset><aside className="parameter-preview"><section className="panel"><div className="preview-heading"><span>质量分布预览</span><span>{pending?<LoaderCircle className="spin" size={12}/>:<Check size={12}/>} {pending?'更新中':'零位模型'}</span></div><Scene frame={preview?.frame||null} overlay={preview?{body:preview.bodies.find(b=>b.name===selected)!,totalCom:preview.com_world,showInertia}:undefined}/><div className="preview-legend"><span><i className="cg-marker"/>所选刚体质心</span><span><i className="total-marker"/>运动部分总重心</span><label><input type="checkbox" checked={showInertia} onChange={e=>setShowInertia(e.target.checked)}/>惯量椭球</label></div></section>
    {error&&<div className="parameter-error" role="alert">{error}<small>请修正参数。预览保留上次有效模型，保存暂不可用。</small></div>}

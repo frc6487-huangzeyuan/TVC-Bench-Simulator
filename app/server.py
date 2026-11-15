@@ -6,11 +6,11 @@ from fastapi.responses import FileResponse,Response,JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .compiler import ROOT,DEFAULT_PROJECT,current_project,save_state,scan_project,read_source,build_project,build_is_current
-from .simulation import Experiment,SimulationManager,META,parameter_preview
+from .simulation import BALANCE,Experiment,SimulationManager,META,PLAYBACK_SPEEDS,parameter_preview
 from .tuning import TuningManager,TuningRequest,GAINS,ACTIVE
 from .real_recording import RealRecorder,export_csv
 from .real_transport import device_info,proxy_device,allowed_local_origin
-from .native_console import native_control
+from .native_console import native_control,console_asset
 
 manager=None
 tuner=None
@@ -29,7 +29,12 @@ app=FastAPI(title='TVC Studio',lifespan=lifespan)
 class ProjectRequest(BaseModel):path:str
 class SourceRequest(BaseModel):project:str;file:str
 class AdapterRequest(BaseModel):content:str
-class ActionRequest(BaseModel):action:str;x:float=0;y:float=.15
+class ActionRequest(BaseModel):
+    action:str
+    x:float=0
+    y:float=.15
+    speed:float|None=None
+    position_mm:float|None=None
 class TrainingSelection(BaseModel):id:str
 class RecordStart(BaseModel):transport:str
 
@@ -109,10 +114,10 @@ def tuning_select(body:TrainingSelection):
     with execution_lock:return wrap_error(lambda:tuner.select(body.id))
 
 def local_request(request:Request):
-    if request.headers.get('host') not in ('127.0.0.1:8765','localhost:8765'):
+    if request.headers.get('host') not in ('127.0.0.1:18767','localhost:18767'):
         raise HTTPException(403,'仅允许本地控制台访问。')
     origin=request.headers.get('origin')
-    if origin and origin not in ('http://127.0.0.1:8765','http://localhost:8765'):
+    if origin and origin not in ('http://127.0.0.1:18767','http://localhost:18767'):
         raise HTTPException(403,'仅允许本地控制台访问。')
 
 @app.get('/api/real/device')
@@ -203,7 +208,7 @@ def tuning_apply(cfg:Experiment,stop_running:bool=False):
         state=current_project();build=state.get('build')
         if not build_is_current(build) or build['fingerprint']!=result['build']['fingerprint']:
             raise HTTPException(400,'当前控制器与训练快照不一致，请重新训练。')
-        ignored=expected|{'duration_s','initial_x_deg','initial_y_deg','realtime','seed'}
+        ignored=expected|{'duration_s','initial_x_deg','initial_y_deg','realtime','playback_speed','seed'}
         if cfg.control_law=='pid':ignored.add('model_accel_limit_dps2')
         snapshot=result['request']['experiment'].copy()
         # 旧模型记录的加速度上限来自标定快照，不能按新默认值重解释。
@@ -240,9 +245,13 @@ def save_parameters(cfg:Experiment):
 
 @app.post('/api/simulation/action')
 def action(body:ActionRequest):
-    if body.action not in ['pause','resume','stop','disturb']:raise HTTPException(400,'未知实验操作。')
-    if abs(body.x)>2 or abs(body.y)>2:raise HTTPException(400,'扰动力矩范围为 ±2 N·m。')
-    wrap_error(lambda:manager.command(body.action,x=body.x,y=body.y));return {'ok':True}
+    if body.action not in ['pause','resume','stop','disturb','target','speed','step','balance']:raise HTTPException(400,'未知实验操作。')
+    if body.action=='speed' and body.speed not in PLAYBACK_SPEEDS:raise HTTPException(400,'请选择支持的仿真倍速。')
+    if body.action=='balance' and (body.position_mm is None or not BALANCE['min_mm']<=body.position_mm<=BALANCE['max_mm']):
+        raise HTTPException(400,'滑架目标超出 CAD 几何参考行程。')
+    if body.action=='target' and not (abs(body.x)<=20 and abs(body.y)<=20):raise HTTPException(400,'目标倾角范围为 ±20°。')
+    if body.action=='disturb' and not (abs(body.x)<=2 and abs(body.y)<=2):raise HTTPException(400,'扰动力矩范围为 ±2 N·m。')
+    wrap_error(lambda:manager.command(body.action,x=body.x,y=body.y,speed=body.speed,position_mm=body.position_mm));return {'ok':True}
 
 @app.get('/api/simulation/state')
 def state():return manager.poll()
@@ -287,9 +296,7 @@ def device_console(asset:str):
     if asset=='native-control.mjs':
         text=wrap_error(lambda:native_control(project))
     elif asset in ('protocol.mjs','preview.mjs'):
-        path=Path(project)/'web'/'dist'/asset
-        if not path.is_file():raise HTTPException(404,'当前飞控工程没有网页协议代码。')
-        text=path.read_text(encoding='utf-8')
+        text=wrap_error(lambda:console_asset(asset))
     else:raise HTTPException(404,'未找到控制代码。')
     return Response(text,media_type='application/javascript',headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 

@@ -74,7 +74,7 @@ def main():
         shutil.move(str(ROOT/'runs'/crash_id),str(ROOT/'reports'/('isolated-controller-exit-'+crash_id)))
         checks.append('controller process exit preserves error report without stopping the app')
     finally:pass
-    with httpx.Client(base_url='http://127.0.0.1:8765',timeout=20) as client:
+    with httpx.Client(base_url='http://127.0.0.1:18767',timeout=20) as client:
         cfg=Experiment(duration_s=20,initial_x_deg=0,initial_y_deg=0).model_dump()
         start=client.post('/api/simulation/start',json=cfg);start.raise_for_status();run_id=start.json()['run_id']
         def wait_status(states,timeout=6):

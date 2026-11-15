@@ -7,6 +7,7 @@
     <mesh name="rocket_body" content_type="model/stl" file="rocket_body.stl" />
     <mesh name="azimuth_stage" content_type="model/stl" file="azimuth_stage.stl" />
     <mesh name="thrust_unit" content_type="model/stl" file="thrust_unit.stl" />
+    <mesh name="balance_carriage" content_type="model/stl" file="balance_carriage.stl" />
   </asset>
   <worldbody>
     <body name="base">
@@ -17,7 +18,7 @@
         <joint name="stand_outer" axis="1.66533453694e-16 -1 -5.03385167242e-18" />
         <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.42 0.46 0.52 1" density="0" mesh="outer_frame" />
         <body name="rocket_body" quat="0.998450121763 -0.0551250784734 -5.7986267665e-17 -0.00765376209877" pos="0 0 0">
-          <inertial pos="-0.0104871401813 -0.00638919275608 0.0585188775443" mass="0.874809848988" fullinertia="0.00759079266883 0.00826048937692 0.0049008019324 -7.84079442227e-05 0.000310782309314 0.000412357656431" />
+          <inertial pos="-0.00840272158426 -0.00684483342409 0.0619180050811" mass="0.804738394382" fullinertia="0.00744264762787 0.00807135165304 0.00482505322739 -8.65433177601e-05 0.000383228130994 0.000391532768041" />
           <joint name="stand_inner" axis="0.990498390146 1.04230440416e-15 0.137524321912" />
           <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.08 0.43 0.68 1" density="0" mesh="rocket_body" />
           <body name="azimuth_stage" pos="0.0117341491358 0.00815553455445 -0.0711017490222" quat="1 -0 -0 0">
@@ -31,6 +32,11 @@
               <site name="thrust_point" pos="0.014149443498 0.00957158172548 -0.071496507411" size=".003" rgba="1 .15 .1 1" />
             </body>
           </body>
+          <body name="balance_carriage" pos="-0.0369608935559 -0.00438663626895 0.0299289691368" quat="1 0 0 0">
+            <inertial pos="0.00253516547997 0.00323026680239 -0.010447506353" mass="0.0700714546052" fullinertia="2.99779673204e-05 2.94051531704e-05 3.00116122612e-05 -1.40652231768e-06 -1.26227018479e-06 5.26461609116e-06" />
+            <joint name="cg_slide" type="slide" range="-0.091 0.027" axis="-0.990498390146 -8.79496495662e-16 -0.137524321912" />
+            <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.9 0.73 0.28 1" density="0" mesh="balance_carriage" />
+          </body>
           <site name="body_reference" pos="0 0 0" quat="-0.0038360039508 -0.0688192560297 -0.0555215221752 0.996075577277" size=".003" rgba=".1 1 .1 1" />
         </body>
       </body>
@@ -39,6 +45,9 @@
     <geom name="floor" type="plane" size="1 1 .02" rgba=".88 .9 .92 1" contype="0" conaffinity="0" />
   </worldbody>
   <option timestep="0.001" gravity="0 0 -9.80665" integrator="implicitfast" />
+  <equality>
+    <joint name="cg_position_hold" joint1="cg_slide" polycoef="0 0 0 0 0" solref=".006 1" solimp=".999 .9999 .0001" />
+  </equality>
   <visual>
     <global offwidth="1600" offheight="1200" />
   </visual>
@@ -48,7 +57,7 @@
     <accelerometer name="ideal_accel" site="body_reference" />
   </sensor>
   <keyframe>
-    <key name="upright" qpos="0 0 0 0" />
-    <key name="cad_saved_pose" qpos="0.137961551603 0.11136530002 0 0.0580810249599" />
+    <key name="upright" qpos="0 0 0 0 0" />
+    <key name="cad_saved_pose" qpos="0.137961551603 0.11136530002 0 0.0580810249599 0" />
   </keyframe>
 </mujoco>

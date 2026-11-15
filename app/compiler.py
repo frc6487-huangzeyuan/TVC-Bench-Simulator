@@ -4,9 +4,9 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 SUBMODULE_PROJECT=ROOT/'firmware'/'TVC_Electronics'
-LEGACY_PROJECT=Path(r'C:\Projects\代码\TVC_Electronics')
+WORKBENCH_PROJECT=ROOT.parent/'01_硬件飞控'/'TVC_Electronics'
 # 已保存的工程选择始终优先；全新工作区使用已初始化的飞控子模块。
-DEFAULT_PROJECT=SUBMODULE_PROJECT if (SUBMODULE_PROJECT/'GimbalControl.h').is_file() else LEGACY_PROJECT
+DEFAULT_PROJECT=WORKBENCH_PROJECT if (WORKBENCH_PROJECT/'GimbalControl.h').is_file() else SUBMODULE_PROJECT
 GXX=Path(r'C:\msys64\ucrt64\bin\g++.exe')
 STATE=ROOT/'work/studio_project.json'
 EXTS={'.ino','.h','.hpp','.cpp','.c','.cc'}
@@ -71,6 +71,9 @@ def build_project(path,persist=True):
         if len(translation_units)>30:raise ValueError('单个适配工程最多支持 30 个 C/C++ 编译单元。')
         if any(not f.resolve().is_relative_to(p) for f in include_dirs):raise ValueError('头文件搜索目录必须在工程内部。')
     queue=[p/'GimbalControl.h',p/'HistoryAttitude.h'] if project['adapter']=='tvc' else [p/n for n in translation_units]
+    if project['adapter']=='tvc' and (p/'ThrustTorqueControl.h').is_file():
+        queue.append(p/'ThrustTorqueControl.h')
+        project['scope']='原工程 Attitude + GimbalPid + ThrustTorqueControl'
     copied={}
     while queue:
         f=queue.pop(0).resolve()
@@ -88,11 +91,11 @@ def build_project(path,persist=True):
     if project['adapter']=='tvc':shutil.copy2(ROOT/'controllers/tvc_adapter.cpp',source/'sim_controller.cpp')
     dll=folder/'controller.dll'
     command=[str(GXX),'-std=c++17','-O2','-shared','-static','-static-libgcc','-static-libstdc++']
-    for d in include_dirs:command+=['-I',str(source/d.resolve().relative_to(p))]
-    command += [str(source/n) for n in translation_units]+['-o',str(dll)]
+    for d in include_dirs:command+=['-I',str(d.resolve().relative_to(p))]
+    command += translation_units+['-o',str(Path('..')/dll.name)]
     env=os.environ.copy();env['PATH']=str(GXX.parent)+os.pathsep+env.get('PATH','')
     start=time.perf_counter()
-    try:result=subprocess.run(command,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=60,env=env,creationflags=0x08000000)
+    try:result=subprocess.run(command,cwd=source,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=60,env=env,creationflags=0x08000000)
     except subprocess.TimeoutExpired:raise ValueError('C++ 编译超过 60 秒，已结束编译进程。请检查适配工程。')
     logs=(result.stdout+'\n'+result.stderr).strip()
     (folder/'build.log').write_text(logs,encoding='utf-8')

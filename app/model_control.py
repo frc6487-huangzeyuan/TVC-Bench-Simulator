@@ -9,10 +9,28 @@ from scipy.optimize import least_squares
 def model_compensation(cfg):
     # 控制增益、初始状态和噪声不改变该标定。物理参数变化后自动重新求解。
     excluded={'control_law','duration_s','initial_x_deg','initial_y_deg','initial_azimuth_deg',
-              'initial_elevation_deg','auto_prepare_servos','realtime','seed','use_truth',
+              'initial_elevation_deg','auto_prepare_servos','realtime','playback_speed','seed','use_truth',
               'kp_x','ki_x','kd_x','kp_y','ki_y','kd_y','gyro_noise_dps','accel_noise_g',
-              'latency_ms','drop_pct','imu_height_mm','slew_us'}
+              'latency_ms','drop_pct','imu_height_mm','slew_us','target_x_deg','target_y_deg','torque_max_pct','torque_base_pct',
+              'torque_deflection_limit_deg'}
     return _calibrate(json.dumps(cfg.model_dump(exclude=excluded),sort_keys=True))
+
+
+def torque_compensation(cfg):
+    # 以轴承交点为力矩参考点。CAD 有效力臂和配平值只供仿真。
+    from .simulation import make_model
+    neutral=cfg.model_copy(update={'initial_x_deg':0.,'initial_y_deg':0.,'initial_azimuth_deg':180.,
+                                  'initial_elevation_deg':135.,'imu_height_mm':0.})
+    model,data,_=make_model(neutral)
+    axis=data.site_xmat[model.site('body_reference').id].reshape(3,3)[:,2]
+    offset=data.site_xpos[model.site('thrust_point').id]-data.xanchor[model.joint('stand_inner').id]
+    full_torque=cfg.max_thrust_n*abs(float(axis@offset))
+    calibration=model_compensation(cfg.model_copy(update={'throttle_pct':cfg.torque_base_pct,
+                                                         'correction_limit_deg':cfg.torque_deflection_limit_deg}))
+    slope=full_torque*(cfg.torque_base_pct/100)**2*math.pi/180
+    return {'full_torque_nm':full_torque,
+            'trim_nm':(slope*np.array(calibration['bias'])).tolist(),
+            'gravity_nm_per_deg':(-slope*np.array(calibration['inverse'])@calibration['gravity']).tolist()}
 
 
 @lru_cache(maxsize=16)

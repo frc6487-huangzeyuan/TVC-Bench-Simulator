@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parent
 
 def open_window():
-    url='http://127.0.0.1:8765'
+    url='http://127.0.0.1:18767'
     for _ in range(80):
         try:
             with urllib.request.urlopen(url+'/api/bootstrap',timeout=1) as r:
@@ -23,7 +23,7 @@ if __name__=='__main__':
         log=(ROOT/'reports/studio-server.log').open('a',encoding='utf-8',buffering=1)
         sys.stdout=log;sys.stderr=log
     try:
-        with urllib.request.urlopen('http://127.0.0.1:8765/api/bootstrap',timeout=.5) as r:
+        with urllib.request.urlopen('http://127.0.0.1:18767/api/bootstrap',timeout=.5) as r:
             if r.status==200:
                 if '--no-browser' not in sys.argv:open_window()
                 sys.exit(0)
@@ -31,6 +31,6 @@ if __name__=='__main__':
     if '--no-browser' not in sys.argv:threading.Thread(target=open_window,daemon=True).start()
     import uvicorn
     from app.server import app
-    server=uvicorn.Server(uvicorn.Config(app,host='127.0.0.1',port=8765,log_level='warning'))
+    server=uvicorn.Server(uvicorn.Config(app,host='127.0.0.1',port=18767,log_level='warning'))
     app.state.uvicorn_server=server
     server.run()

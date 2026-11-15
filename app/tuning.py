@@ -50,6 +50,8 @@ class TuningRequest(BaseModel):
 
     @model_validator(mode='after')
     def check_bounds(self):
+        if self.experiment.control_law=='torque':
+            raise ValueError('自动调参目前支持角度 PID 和模型换算。推力力矩增益可在实验台设置。')
         if self.optimize_limit:
             if self.algorithm!='de':raise ValueError('最大修正角搜索仅支持差分进化。')
             lo,hi=self.limit_bounds

@@ -66,9 +66,9 @@
 01-单轴电机组装-2/01-M3 20尼龙套-4,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
 01-单轴电机组装-2/01-M3 20尼龙套-11,17,C:\Projects\机械部分\01-M3 20尼龙套.SLDPRT,azimuth_stage,0.0006283185307179585,CAD default; hardware mass unverified,part_017.stl
 03-10mm光杆 125mm-1,39,C:\Projects\机械部分\03-10mm光杆 125mm.SLDPRT,rocket_body,0.0098174770424681,CAD default; hardware mass unverified,part_039.stl
-03-重力模块舵机-5/04-齿轮.step-1,41,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\04-齿轮.step.SLDPRT,rocket_body,0.006266963251371878,PETG nominal density; CAD solid volume,part_041.stl
-03-重力模块舵机-5/01-单轴舵机-1,28,C:\Projects\机械部分\01-单轴舵机.SLDPRT,rocket_body,0.03244156815653546,CAD default; hardware mass unverified,part_028.stl
-03-重力模块舵机-5/01-金属主舵盘-1,38,C:\Projects\机械部分\01-金属主舵盘.SLDPRT,rocket_body,0.0007505256302867342,CAD default; hardware mass unverified,part_038.stl
+03-重力模块舵机-5/04-齿轮.step-1,41,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\04-齿轮.step.SLDPRT,balance_carriage,0.006266963251371878,PETG nominal density; CAD solid volume,part_041.stl
+03-重力模块舵机-5/01-单轴舵机-1,28,C:\Projects\机械部分\01-单轴舵机.SLDPRT,balance_carriage,0.03244156815653546,CAD default; hardware mass unverified,part_028.stl
+03-重力模块舵机-5/01-金属主舵盘-1,38,C:\Projects\机械部分\01-金属主舵盘.SLDPRT,balance_carriage,0.0007505256302867342,CAD default; hardware mass unverified,part_038.stl
 02-连接件-1,42,C:\Projects\机械部分\02-连接件.SLDPRT,rocket_body,0.001018841172154269,PETG nominal density; CAD solid volume,part_042.stl
 03-10mm光杆 125mm-2,39,C:\Projects\机械部分\03-10mm光杆 125mm.SLDPRT,rocket_body,0.0098174770424681,CAD default; hardware mass unverified,part_039.stl
 03-立式轴承座222-2/立式轴承座.STEP-1/RTWN22_1.STEP-1,4,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\RTWN22_1.STEP.SLDPRT,base,0.0001286261425384897,CAD default; hardware mass unverified,part_004.stl
@@ -77,5 +77,5 @@
 03-75mm 10mm-2,8,C:\Projects\机械部分\03-75mm 10mm.SLDPRT,outer_frame,0.008639379797371931,CAD default; hardware mass unverified,part_008.stl
 05-电子部分-1,43,C:\Projects\机械部分\05-电子部分.SLDPRT,rocket_body,0.09074748193763729,PETG nominal density; CAD solid volume,part_043.stl
 04-直齿条.step-1,44,C:\Users\huang\AppData\Local\Temp\swx20076\IC~~\04-直齿条.step.SLDPRT,rocket_body,0.012338916639239772,PETG nominal density; CAD solid volume,part_044.stl
-04-舵机齿轮连接-2,45,C:\Projects\机械部分\04-舵机齿轮连接.SLDPRT,rocket_body,0.030612397566995825,PETG nominal density; CAD solid volume,part_045.stl
+04-舵机齿轮连接-2,45,C:\Projects\机械部分\04-舵机齿轮连接.SLDPRT,balance_carriage,0.030612397566995825,PETG nominal density; CAD solid volume,part_045.stl
 06-火箭顶锥-3,46,C:\Projects\机械部分\06-火箭顶锥.SLDPRT,rocket_body,0.2087533379066494,PETG nominal density; CAD solid volume,part_046.stl

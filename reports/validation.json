@@ -1,10 +1,11 @@
 {
   "urdf_load": true,
   "mjcf_load": true,
-  "link_count": 5,
-  "joint_count": 4,
+  "link_count": 6,
+  "joint_count": 5,
   "passive_bearing_axes": 2,
   "finite_tvc_axes": 2,
+  "balance_slide": true,
   "cad_leaf_instances": 80,
   "cad_saved_pose_max_error": 2.3503008079236324e-13,
   "urdf_mjcf_max_pose_error": 6.760147996942578e-13,

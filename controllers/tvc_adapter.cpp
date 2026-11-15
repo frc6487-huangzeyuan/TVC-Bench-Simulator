@@ -1,6 +1,11 @@
 #include "sim_api.h"
 #include "GimbalControl.h"
 #include "HistoryAttitude.h"
+#if __has_include("ThrustTorqueControl.h")
+#include "ThrustTorqueControl.h"
+static ThrustTorqueControl torque;
+static bool torqueEnabled=false;
+#endif
 #include <memory>
 // 直接调用工程原始头文件，不在 Python/JavaScript 中重写 PID。
 static std::unique_ptr<GimbalPid> pid;
@@ -11,6 +16,9 @@ static int sent[2] = {1500,1500};
 static float previous_gyro[3]={0,0,0};
 SIM_API int sim_abi_version(){return 1;}
 SIM_API void sim_reset(const SimConfig* c){
+#if __has_include("ThrustTorqueControl.h")
+  torqueEnabled=false;
+#endif
   settings=*c; attitude=Attitude(); sent[0]=sent[1]=1500;
   for(int k=0;k<3;++k)previous_gyro[k]=0;
   GimbalConfig p{{float(c->kp[0]),float(c->ki[0]),float(c->kd[0])},
@@ -30,7 +38,31 @@ SIM_API int sim_set_model(const double *values){
   pid.reset(new GimbalPid(pidConfig));return pid->configurationValid()?0:-1;
 }
 #endif
+#if __has_include("ThrustTorqueControl.h")
+SIM_API int sim_set_torque(const double *values) {
+  ThrustTorqueConfig config;
+  config.fullTorqueNm=float(values[0]);config.basePct=float(settings.throttle_pct);
+  config.maximumPct=float(values[1]);
+  for(int k=0;k<2;++k) {
+    config.gains[k]=k==0?pidConfig.x:pidConfig.y;
+    config.trimNm[k]=float(values[4+k]);
+    for(int j=0;j<2;++j)config.gravityNmPerDeg[k][j]=float(values[6+2*k+j]);
+  }
+  torqueEnabled=torque.configure(config)&&torque.setTarget(float(values[2]),float(values[3]));
+  return torqueEnabled?0:-1;
+}
+SIM_API int sim_set_target(double x,double y) {
+  return torqueEnabled&&torque.setTarget(float(x),float(y))?0:-1;
+}
+#endif
 SIM_API int sim_preposition(double x,double y,double current_azimuth,double *pwm){
+#if __has_include("ThrustTorqueControl.h")
+  if(torqueEnabled){
+    int current[2]={GimbalPid::angleToUs(float(current_azimuth),0),sent[1]},goal[2];
+    if(!torque.prepare(pidConfig,float(x),float(y),current,goal))return -1;
+    pwm[0]=goal[0];pwm[1]=goal[1];return 0;
+  }
+#endif
   float vx,vy,azimuth,elevation;
 #ifdef TVC_MODEL_COMPENSATION_API
   GimbalPid::initialVector(pidConfig,float(x),float(y),vx,vy);
@@ -65,6 +97,22 @@ SIM_API int sim_step(const SimInput* i,SimOutput* o){
   if(settings.use_truth>.5)for(int a=0;a<3;++a)for(int b=0;b<3;++b)r.m[a][b]=float(i->truth_rotation[a*3+b]);
   float x,y;if(!gimbalLean(r,x,y))return -4;
   int target[2]={sent[0],sent[1]};
+#if __has_include("ThrustTorqueControl.h")
+  if(torqueEnabled){
+    if(i->sample_age_s>.05 || !torque.update(pidConfig,uint64_t(i->time_us),r,previous_gyro,sent,target))return -7;
+    for(int k=0;k<2;++k){
+      o->pwm_us[k]=sent[k]=target[k];
+      o->pid[3*k]=torque.terms[k].p;o->pid[3*k+1]=torque.terms[k].i;o->pid[3*k+2]=torque.terms[k].d;
+    }
+    o->throttle_pct=torque.throttlePct;
+    o->estimated_lean_deg[0]=x;o->estimated_lean_deg[1]=y;
+    o->limited=torque.limited?1:0;o->status=1;
+#ifdef TVC_AZIMUTH_REWIND_API
+    if(torque.rewinding())o->status=2;
+#endif
+    return 0;
+  }
+#endif
   auto result=pid->update(uint64_t(i->time_us),x,y,sent,target,i->sample_age_s<=.05);
   if(result==GimbalPid::INVALID)return -5;
   sent[0]=target[0];sent[1]=target[1];

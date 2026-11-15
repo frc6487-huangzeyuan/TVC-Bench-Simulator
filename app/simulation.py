@@ -3,13 +3,21 @@ import csv,ctypes as ct,json,math,multiprocessing as mp,queue,time,traceback,uui
 from collections import deque
 from pathlib import Path
 import mujoco
+from app.model_loader import load_model
 import numpy as np
 from pydantic import BaseModel,Field,ConfigDict,model_validator
 from typing import Annotated,Literal
 
 ROOT=Path(__file__).resolve().parents[1]
 META=json.loads((ROOT/'reports/model_metadata.json').read_text(encoding='utf-8'))
-NAMES=['base','outer_frame','rocket_body','azimuth_stage','thrust_unit']
+NAMES=['base','outer_frame','rocket_body','azimuth_stage','thrust_unit','balance_carriage']
+BALANCE=META['balance_carriage']
+CG_PWM_MIN=500
+CG_PWM_HOME=1500
+CG_PWM_MAX=2000
+CG_PWM_STEP=12 # 新版固件 GPIO7 的每 10 ms 指令变化量。
+PLAYBACK_SPEEDS=(0.,.1,.25,.5,1.,2.,4.)
+STEP_TICKS=10  # 单步跨过一个 100 Hz 飞控周期；物理仍以 1 ms 积分。
 
 class ThrustPoint(BaseModel):
     model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
@@ -39,12 +47,17 @@ class Experiment(BaseModel):
     initial_azimuth_deg:float=Field(180,ge=0,le=360)
     initial_elevation_deg:float=Field(135,ge=85,le=185)
     auto_prepare_servos:bool=True
-    control_law:Literal['pid','model']='pid'
+    control_law:Literal['pid','model','torque']='pid'
+    target_x_deg:float=Field(0,ge=-20,le=20)
+    target_y_deg:float=Field(0,ge=-20,le=20)
+    torque_base_pct:float=Field(65,gt=0,le=100)
+    torque_max_pct:float=Field(75,gt=0,le=100)
+    torque_deflection_limit_deg:float=Field(25,ge=1,le=25)
     model_accel_limit_dps2:float=Field(20,ge=3,le=100)
     kp_x:float=Field(.6,ge=0,le=10);ki_x:float=Field(0,ge=0,le=2);kd_x:float=Field(.03,ge=0,le=2)
     kp_y:float=Field(.6,ge=0,le=10);ki_y:float=Field(0,ge=0,le=2);kd_y:float=Field(.03,ge=0,le=2)
     correction_limit_deg:float=Field(15,ge=1,le=50)
-    slew_us:float=Field(3,ge=1,le=100)
+    slew_us:float=Field(25,ge=1,le=100)
     throttle_pct:float=Field(55,ge=0,le=100)
     max_thrust_n:float=Field(12,ge=0,le=100)
     motor_tau_s:float=Field(.08,ge=.005,le=2)
@@ -54,10 +67,12 @@ class Experiment(BaseModel):
     bearing_damping:float=Field(.01,ge=0,le=1)
     mass_scale:float=Field(1,ge=.1,le=5)
     cg_offset_mm:float=Field(0,ge=-100,le=100)
+    cg_initial_mm:float=Field(0,ge=BALANCE['min_mm'],le=BALANCE['max_mm'])
+    cg_ballast_g:float=Field(300,ge=0,le=5000)
     thrust_mode:Literal['quadratic','rpm_curve']='quadratic'
     max_rpm:float=Field(20000,ge=100,le=200000)
     thrust_curve:list[ThrustPoint]=Field(default_factory=lambda:[ThrustPoint(rpm=r,thrust_n=f) for r,f in [(0,0),(5000,.75),(10000,3),(15000,6.75),(20000,12)]],min_length=2,max_length=16)
-    body_overrides:dict[Literal['outer_frame','rocket_body','azimuth_stage','thrust_unit'],BodyOverride]=Field(default_factory=dict)
+    body_overrides:dict[Literal['outer_frame','rocket_body','azimuth_stage','thrust_unit','balance_carriage'],BodyOverride]=Field(default_factory=dict)
     gyro_noise_dps:float=Field(.03,ge=0,le=5)
     accel_noise_g:float=Field(.003,ge=0,le=.2)
     latency_ms:float=Field(5,ge=0,le=300)
@@ -66,6 +81,7 @@ class Experiment(BaseModel):
     azimuth_trim_deg:float=Field(0,ge=-180,le=180)
     use_truth:bool=False
     realtime:bool=True
+    playback_speed:Literal[.1,.25,.5,1.,2.,4.]=1.
     seed:int=Field(42,ge=0,le=2**31-1)
 
     @model_validator(mode='after')
@@ -77,6 +93,13 @@ class Experiment(BaseModel):
             raise ValueError('转速必须严格递增，推力不能递减。')
         if self.thrust_mode=='rpm_curve' and points[-1].rpm<self.max_rpm:
             raise ValueError('推力曲线必须覆盖最高转速。')
+        if self.control_law=='torque':
+            if abs(self.initial_elevation_deg-135)>25:
+                raise ValueError('推力力矩模式的初始俯仰角需在 110°～160° 内。')
+            if self.thrust_mode!='quadratic' or self.max_thrust_n<=0 or self.torque_base_pct>self.torque_max_pct:
+                raise ValueError('推力力矩使用平方推力模型，且须满足 0 < 基准油门 ≤ 油门上限。')
+            if self.kp_x<=0 or self.kp_y<=0:
+                raise ValueError('推力力矩的两路比例增益须大于零。')
         return self
 
 def thrust_at_rpm(cfg,rpm):
@@ -105,8 +128,10 @@ def load_native(dll,cfg,start_pwm=None):
     lib.sim_reset.argtypes=[ct.POINTER(NativeConfig)];lib.sim_reset.restype=None
     lib.sim_sample.argtypes=[ct.POINTER(NativeInput)];lib.sim_sample.restype=ct.c_int
     lib.sim_step.argtypes=[ct.POINTER(NativeInput),ct.POINTER(NativeOutput)];lib.sim_step.restype=ct.c_int
+    throttle=cfg.torque_base_pct if cfg.control_law=='torque' else cfg.throttle_pct
+    deflection=cfg.torque_deflection_limit_deg if cfg.control_law=='torque' else cfg.correction_limit_deg
     c=NativeConfig((cfg.kp_x,cfg.kp_y),(cfg.ki_x,cfg.ki_y),(cfg.kd_x,cfg.kd_y),
-                   3,.03,cfg.correction_limit_deg,(1,1),180,cfg.slew_us,50000,cfg.throttle_pct,int(cfg.use_truth))
+                   3,.03,deflection,(1,1),180,cfg.slew_us,50000,throttle,int(cfg.use_truth))
     lib.sim_reset(ct.byref(c))
     if cfg.control_law=='model':
         from .model_control import model_compensation
@@ -117,6 +142,16 @@ def load_native(dll,cfg,start_pwm=None):
                                 *np.array(model['inverse']).ravel(),model['acceleration_limit'])
         lib.sim_set_model.argtypes=[ct.POINTER(ct.c_double)];lib.sim_set_model.restype=ct.c_int
         if lib.sim_set_model(values):raise RuntimeError('C++ 控制器拒绝模型换算参数。')
+    if cfg.control_law=='torque':
+        from .model_control import torque_compensation
+        if not hasattr(lib,'sim_set_torque'):
+            raise RuntimeError('当前 C++ 控制器不支持推力力矩，请重新编译 2.5.0 或更新的飞控源码。')
+        torque=torque_compensation(cfg)
+        values=(ct.c_double*10)(torque['full_torque_nm'],cfg.torque_max_pct,cfg.target_x_deg,cfg.target_y_deg,
+                                *torque['trim_nm'],*np.array(torque['gravity_nm_per_deg']).ravel())
+        lib.sim_set_torque.argtypes=[ct.POINTER(ct.c_double)];lib.sim_set_torque.restype=ct.c_int
+        if lib.sim_set_torque(values):raise RuntimeError('C++ 控制器拒绝推力力矩参数。')
+        lib.sim_set_target.argtypes=[ct.c_double,ct.c_double];lib.sim_set_target.restype=ct.c_int
     # 可选 v1 扩展：同步原控制器的已发送 PWM，绝不以复位中位冒充真实初始位置。
     pwm=start_pwm if start_pwm is not None else initial_pwm(cfg)
     if hasattr(lib,'sim_set_initial_pwm'):
@@ -127,11 +162,12 @@ def load_native(dll,cfg,start_pwm=None):
     return lib
 
 def make_model(cfg):
-    model=mujoco.MjModel.from_xml_path(str(ROOT/'mjcf/tvc_bench.xml'));data=mujoco.MjData(model)
+    model=load_model();data=mujoco.MjData(model)
     model.opt.timestep=.001;model.dof_damping[:2]=cfg.bearing_damping
-    for name in ['rocket_body','azimuth_stage','thrust_unit']:
+    for name in NAMES[2:]:
         i=model.body(name).id;model.body_mass[i]*=cfg.mass_scale;model.body_inertia[i]*=cfg.mass_scale
-    model.body_ipos[model.body('rocket_body').id]+=np.array(META['body_z_in_link'])*cfg.cg_offset_mm/1000
+    for name in ('rocket_body','balance_carriage'):
+        model.body_ipos[model.body(name).id]+=np.array(META['body_z_in_link'])*cfg.cg_offset_mm/1000
     site=model.site('body_reference').id
     model.site_pos[site]+=np.array(META['body_z_in_link'])*cfg.imu_height_mm/1000
     mujoco.mj_forward(model,data)
@@ -144,6 +180,7 @@ def make_model(cfg):
     trim=(math.pi-math.atan2(derivative[1],derivative[0])+math.pi)%(2*math.pi)-math.pi
     trim+=math.radians(cfg.azimuth_trim_deg)
     model.jnt_range[2]=[-math.pi+trim,math.pi+trim]
+    if cfg.control_law=='torque':model.jnt_range[3]=np.radians([-25,25])
     data.qpos[2]=trim
     # 偏移量统一按零位机体系 XYZ 给定，再转换到各刚体局部坐标。
     mujoco.mj_forward(model,data)
@@ -156,16 +193,88 @@ def make_model(cfg):
         if override.inertia_kg_m2 is not None:model.body_inertia[i]=override.inertia_kg_m2
         rotation=data.xmat[i].reshape(3,3)
         model.body_ipos[i]+=rotation.T@reference@np.array(override.cg_offset_mm)/1000
+    # 未知配重形状和安装偏心。先把附加质量视作滑架质心处的集中质量。
+    model.body_mass[model.body('balance_carriage').id]+=cfg.cg_ballast_g/1000
     mujoco.mj_setConst(model,data)
     data.qpos[2]=trim+math.radians(cfg.initial_azimuth_deg-180)
     data.qpos[3]=math.radians(cfg.initial_elevation_deg-135)
+    data.qpos[model.joint('cg_slide').qposadr[0]]=cfg.cg_initial_mm/1000
+    model.eq_data[model.equality('cg_position_hold').id,0]=cfg.cg_initial_mm/1000
     # 以机体 X/Y 倾斜为初始条件，而不是把两条轴承转角直接当成机体倾角。
     # 当前 CAD 零位机体 XY 与世界 XY 相反；两轴同时偏转时还需补偿 cos(Y)。
     data.qpos[0]=math.atan(math.tan(math.radians(cfg.initial_x_deg))*math.cos(math.radians(cfg.initial_y_deg)))
     data.qpos[1]=math.radians(cfg.initial_y_deg)
     mujoco.mj_forward(model,data);return model,data,trim
 
-def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,controller=None):
+def balance_pwm(position_mm):
+    # CAD 保存位映射至 1500 us。两侧沿各自几何边界线性换算，仅供仿真。
+    if position_mm<0:
+        return CG_PWM_HOME+(CG_PWM_MIN-CG_PWM_HOME)*position_mm/BALANCE['min_mm']
+    return CG_PWM_HOME+(CG_PWM_MAX-CG_PWM_HOME)*position_mm/BALANCE['max_mm']
+
+def balance_position(pwm):
+    if pwm<CG_PWM_HOME:
+        return BALANCE['min_mm']*(CG_PWM_HOME-pwm)/(CG_PWM_HOME-CG_PWM_MIN)
+    return BALANCE['max_mm']*(pwm-CG_PWM_HOME)/(CG_PWM_MAX-CG_PWM_HOME)
+
+def balance_state(model,data,target_mm,pwm):
+    actual_mm=float(data.qpos[model.joint('cg_slide').qposadr[0]])*1000
+    rocket=model.body('rocket_body').id
+    carriage=model.body('balance_carriage').id
+    shift_mm=actual_mm*model.body_mass[carriage]/model.body_subtreemass[rocket]
+    return {'position_mm':actual_mm,'target_mm':target_mm,'pwm_us':pwm,
+            'cg_shift_mm':float(shift_mm),'mass_kg':float(model.body_mass[carriage]),
+            'com_world':data.subtree_com[rocket].tolist()}
+
+class Playback:
+    def __init__(self,cfg):
+        self.speed=cfg.playback_speed if cfg.realtime else 0.
+        self.paused=False
+        self.pending_ticks=0
+        self.rebase(0.)
+
+    def rebase(self,sim_time):
+        self.origin_time=sim_time
+        self.origin_wall=time.perf_counter()
+
+    def ready(self,sim_time,commands,publish,handle=None):
+        """按墙钟限制推进速度。等待命令时保持物理状态，唤醒后沿同一时基推进。"""
+        while True:
+            wait=0.
+            if self.paused and not self.pending_ticks:
+                wait=.05
+            elif self.speed and not self.paused:
+                wait=max(0.,self.origin_wall+(sim_time-self.origin_time)/self.speed-time.perf_counter())
+            try:
+                cmd=commands.get(timeout=min(wait,.05)) if wait>.0001 else commands.get_nowait()
+            except queue.Empty:
+                if wait>.0001:continue
+                return True
+            action=cmd['action']
+            if action=='stop':return False
+            if action=='speed':
+                self.speed=cmd['speed']
+                self.rebase(sim_time)
+                publish()
+            elif action=='pause' and not self.paused:
+                self.paused=True
+                publish()
+            elif action=='resume' and self.paused:
+                self.paused=False
+                self.pending_ticks=0
+                self.rebase(sim_time)
+                publish()
+            elif action=='step' and self.paused:
+                self.pending_ticks+=STEP_TICKS
+            elif handle is not None and handle(cmd,sim_time):
+                publish()
+
+    def advanced(self):
+        if not self.paused:return False
+        self.pending_ticks-=1
+        return self.pending_ticks%STEP_TICKS==0
+
+def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,controller=None,playback=None):
     """固定台架、关闭推力，按真实舵机动力学与指令限速移动到准备位置。"""
     sent=initial_pwm(cfg)
     # 按原 PID 的初始比例项计算纠偏向量；I、D 在启动时尚无历史。
@@ -193,13 +302,24 @@ def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,controller=N
         goal=[int(pwm[0]),int(pwm[1])]
     target=np.array([(goal[0]-1500)*math.pi/1000+trim,(goal[1]-1500)*math.radians(270)/2000])
     held=data.qpos[:2].copy();limit_s=max(5.,max(abs(goal[i]-sent[i]) for i in range(2))/int(cfg.slew_us)*.01+5.)
-    started=time.perf_counter();tick=0;goal_since=None;site=model.site('body_reference').id
+    playback=playback or Playback(cfg)
+    playback.rebase(data.time)
+    tick=0;goal_since=None;site=model.site('body_reference').id
+    def publish():
+        truth=lean(data.site_xmat[site].reshape(3,3))
+        outbox.put({'kind':'frame','run_id':run_id,'status':'paused' if playback.paused else 'starting',
+          'phase':'preposition','time':0.,'preparation_s':round(data.time,6),'playback_speed':playback.speed,
+          'message':'固定台架，舵机预定位中；推力为零','pose':poses(model,data),
+          'x':float(truth[0]),'y':float(truth[1]),'est_x':float(truth[0]),'est_y':float(truth[1]),
+          'tilt':math.degrees(math.acos(float(np.clip(data.site_xmat[site].reshape(3,3)[2,2],-1,1)))),
+          'pwm':sent.copy(),'servo_deg':servo_angles(data,trim),
+          'balance':balance_state(model,data,cfg.cg_initial_mm,balance_pwm(cfg.cg_initial_mm)),
+          'thrust':0.,'rpm':0.,'throttle':0.,'propeller_turns':0.,'pid':[0.]*6,'limited':True,'gyro':[0.]*3,'accel':[0.]*3,
+          'samples':0,'age_ms':0.,'rtf':0.})
+    publish()
     while data.time<limit_s:
-        while True:
-            try:cmd=commands.get_nowait()
-            except queue.Empty:break
-            if cmd['action']=='stop':return None,{'status':'stopped','duration_s':data.time}
-        if tick%10==0:
+        if not playback.ready(data.time,commands,publish):return None,{'status':'stopped','duration_s':data.time}
+        if tick%STEP_TICKS==0:
             for i in range(2):sent[i]+=max(-int(cfg.slew_us),min(int(cfg.slew_us),goal[i]-sent[i]))
         cmd_target=np.array([(sent[0]-1500)*math.pi/1000+trim,(sent[1]-1500)*math.radians(270)/2000])
         speed=np.clip((cmd_target-data.qpos[2:4])/cfg.servo_tau_s,
@@ -209,30 +329,22 @@ def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,controller=N
         mujoco.mj_step(model,data);tick+=1
         # 模拟释放前的固定夹具；准备阶段没有施加任何推力或扰动。
         data.qpos[:2]=held;data.qvel[:2]=0;mujoco.mj_forward(model,data)
-        if tick%20==0:
-            truth=lean(data.site_xmat[site].reshape(3,3))
-            outbox.put({'kind':'frame','run_id':run_id,'status':'starting','time':0,'preparation_s':data.time,
-              'message':'固定台架，舵机预定位中；推力为零','pose':poses(model,data),
-              'x':float(truth[0]),'y':float(truth[1]),'est_x':float(truth[0]),'est_y':float(truth[1]),
-              'tilt':math.degrees(math.acos(float(np.clip(data.site_xmat[site].reshape(3,3)[2,2],-1,1)))),
-              'pwm':sent.copy(),'servo_deg':[math.degrees(data.qpos[2]-trim)+180,math.degrees(data.qpos[3])+135],
-              'thrust':0.,'rpm':0.,'throttle':0.,'pid':[0.]*6,'limited':True,'gyro':[0.]*3,'accel':[0.]*3,
-              'samples':0,'age_ms':0.,'rtf':0.})
+        if playback.advanced() or (not playback.paused and tick%20==0):publish()
         # 指令抵达后仍要等待机械响应；小幅修正不能因位置容差而立即释放。
         if sent==goal and goal_since is None:goal_since=data.time
         if goal_since is not None and data.time-goal_since>=.25 and np.max(np.abs(data.qpos[2:4]-target))<math.radians(1) and np.max(np.abs(data.qvel[2:4]))<math.radians(2):
             info={'status':'completed','duration_s':data.time,'initial_pwm':initial_pwm(cfg),
-                  'target_pwm':goal,'release_servo_deg':[math.degrees(data.qpos[2]-trim)+180,math.degrees(data.qpos[3])+135]}
+                  'target_pwm':goal,'release_servo_deg':servo_angles(data,trim)}
             data.time=0.;data.qfrc_applied[:]=0;mujoco.mj_forward(model,data)
             return sent,info
-        if cfg.realtime:
-            wait=started+data.time-time.perf_counter()
-            if wait>.0001:time.sleep(min(wait,.01))
     raise RuntimeError('舵机预定位超时，尚未达到目标；实验未释放台架。')
 
 def poses(model,data):
     return [{'name':name,'position':data.xpos[model.body(name).id].tolist(),
              'quaternion':data.xquat[model.body(name).id].tolist()} for name in NAMES]
+
+def servo_angles(data,trim):
+    return [math.degrees(data.qpos[2]-trim)+180,math.degrees(data.qpos[3])+135]
 
 def parameter_preview(cfg):
     """与实验共用 make_model；预览不改当前运行、设置或源模型。"""
@@ -258,7 +370,8 @@ def lean(r):return np.degrees([math.atan2(-r[2,0],r[2,2]),math.atan2(-r[2,1],r[2
 def idle_packet():
     m,d,_=make_model(Experiment(initial_x_deg=0))
     return {'kind':'frame','status':'ready','time':0,'pose':poses(m,d),'x':0,'y':0,'est_x':0,'est_y':0,
-            'pwm':[1500,1500],'servo_deg':[180,135],'thrust':0,'throttle':0,'pid':[0]*6,
+            'pwm':[1500,1500],'servo_deg':[180,135],'thrust':0,'rpm':0,'throttle':0,'propeller_turns':0.,'pid':[0]*6,
+            'balance':balance_state(m,d,0.,CG_PWM_HOME),
             'limited':False,'age_ms':0,'rtf':0,'samples':0,'gyro':[0,0,0],'accel':[0,0,1]}
 
 def write_csv(folder,history):
@@ -267,6 +380,7 @@ def write_csv(folder,history):
              'pid':['p_x','i_x','d_x','p_y','i_y','d_y'],
              'gyro':['gyro_x_dps','gyro_y_dps','gyro_z_dps'],
              'accel':['accel_x_g','accel_y_g','accel_z_g'],
+             'motor_joint_torque_nm':['motor_outer_torque_nm','motor_inner_torque_nm'],
              'thrust_origin':['thrust_origin_x_m','thrust_origin_y_m','thrust_origin_z_m'],
              'thrust_direction':['thrust_dir_x','thrust_dir_y','thrust_dir_z']}
     rows=[]
@@ -274,6 +388,8 @@ def write_csv(folder,history):
         row={}
         for k,v in p.items():
             if k in columns:row.update(zip(columns[k],v))
+            elif k=='balance':
+                for name in ('position_mm','target_mm','pwm_us','cg_shift_mm','mass_kg'):row['balance_'+name]=v[name]
             elif k!='pose':row[k]=v
         rows.append(row)
     with (folder/'telemetry.csv').open('w',encoding='utf-8-sig',newline='') as f:
@@ -286,11 +402,14 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
     folder=ROOT/'runs'/run_id
     if record:folder.mkdir(exist_ok=True)
     cfg=Experiment(**config);started=time.time();history=[];reason='completed';message='实验完成';preparation=None
+    target_x,target_y=cfg.target_x_deg,cfg.target_y_deg
+    last_target_s=0.
+    playback=Playback(cfg)
     try:
         model,data,trim=make_model(cfg);prepared_pwm=initial_pwm(cfg)
         lib=load_native(build['dll'],cfg,prepared_pwm)
         if cfg.auto_prepare_servos:
-            prepared_pwm,preparation=prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,lib)
+            prepared_pwm,preparation=prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,lib,playback)
             if prepared_pwm is None:raise PreparationStopped()
             if hasattr(lib,'sim_set_initial_pwm'):lib.sim_set_initial_pwm(*prepared_pwm)
         site=model.site('body_reference').id;thrust_body=model.body('thrust_unit').id
@@ -304,19 +423,60 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
             inp.truth_rotation[:]=data.site_xmat[site];inp.sample_age_s=max(0,data.time-last_sample_t)
         fill_input(.005)
         if lib.sim_sample(ct.byref(inp)):raise RuntimeError('姿态估计初始化失败，请检查控制器输入单位。')
-        tick=0;force=0.;rpm=0.;paused=False;pause_wall=0.;start_wall=time.perf_counter();push_until=-1.;push=np.zeros(3)
+        tick=0;force=0.;rpm=0.;propeller_turns=0.;push_until=-1.;push=np.zeros(3)
+        throttle=0. if cfg.control_law=='torque' else cfg.throttle_pct
+        motor_torque=np.zeros(2)
+        balance_target=cfg.cg_initial_mm
+        carriage_pwm=balance_pwm(balance_target)
+        balance_constraint=model.equality('cg_position_hold').id
+        # 只为显示刷新积分后的世界位姿，和本拍关节角同步；物理、IMU 与控制状态走相同的原循环。
+        view_data=mujoco.MjData(model)
+        def publish(remember=False):
+            view_data.qpos[:]=data.qpos
+            mujoco.mj_kinematics(model,view_data)
+            mujoco.mj_comPos(model,view_data)
+            rotation=view_data.site_xmat[site].reshape(3,3)
+            truth=lean(rotation)
+            elapsed=time.perf_counter()-playback.origin_wall
+            packet={'kind':'frame','run_id':run_id,'status':'paused' if playback.paused else 'running',
+              'phase':'simulation','time':round(data.time,6),'playback_speed':playback.speed,'control_law':cfg.control_law,
+              'pose':poses(model,view_data),'x':float(truth[0]),'y':float(truth[1]),
+              'thrust_origin':view_data.site_xpos[thrust_site].tolist(),
+              'thrust_direction':(view_data.xmat[thrust_body].reshape(3,3)@META['thrust_direction_in_link']).tolist(),
+              'tilt':math.degrees(math.acos(float(np.clip(rotation[2,2],-1,1)))),
+              'est_x':out.estimated_lean_deg[0],'est_y':out.estimated_lean_deg[1],
+              'pwm':list(out.pwm_us),'servo_deg':servo_angles(data,trim),
+              'balance':balance_state(model,view_data,balance_target,carriage_pwm),
+              'thrust':force,'rpm':rpm,'throttle':throttle,'propeller_turns':propeller_turns,
+              'pid':list(out.pid),'limited':bool(out.limited),'gyro':measured_gyro.tolist(),'accel':measured_accel.tolist(),
+              'samples':samples,'age_ms':(data.time-last_sample_t)*1000,
+              'rtf':0. if playback.paused else (data.time-playback.origin_time)/max(elapsed,.001)}
+            if cfg.control_law=='torque':
+                packet.update(target_x=target_x,target_y=target_y,
+                              error_deg=math.hypot(truth[0]-target_x,truth[1]-target_y),
+                              azimuth_rewind=out.status==2,motor_joint_torque_nm=motor_torque.tolist())
+            if remember:
+                history.append(packet.copy() if capture_pose else {k:v for k,v in packet.items() if k!='pose'})
+            outbox.put(packet)
+
+        def handle(cmd,sim_time):
+            nonlocal push,push_until,target_x,target_y,last_target_s,balance_target
+            if cmd['action']=='disturb':
+                push=np.array([cmd.get('x',0),cmd.get('y',.15),0.]);push_until=sim_time+.15
+            elif cmd['action']=='target' and cfg.control_law=='torque':
+                if lib.sim_set_target(cmd['x'],cmd['y']):raise RuntimeError('C++ 控制器拒绝新目标角。')
+                target_x,target_y=cmd['x'],cmd['y']
+                last_target_s=sim_time
+            elif cmd['action']=='balance':
+                balance_target=cmd['position_mm']
+                return True
+            return False
+
+        playback.rebase(data.time)
+        publish()
         while data.time<cfg.duration_s-1e-9:
-            while True:
-                try:cmd=commands.get_nowait()
-                except queue.Empty:break
-                if cmd['action']=='stop':reason='stopped';message='实验已停止';break
-                if cmd['action']=='pause' and not paused:paused=True;pause_wall=time.perf_counter()
-                if cmd['action']=='resume' and paused:start_wall+=time.perf_counter()-pause_wall;paused=False
-                if cmd['action']=='disturb':
-                    push=np.array([cmd.get('x',0),cmd.get('y',.15),0.]);push_until=data.time+.15
-            if reason=='stopped':break
-            if paused:
-                outbox.put({'kind':'status','status':'paused'});time.sleep(.05);continue
+            if not playback.ready(data.time,commands,publish,handle):
+                reason='stopped';message='实验已停止';break
             r=data.site_xmat[site].reshape(3,3)
             if tick%5==0:
                 if rng.random()>=cfg.drop_pct/100:
@@ -329,7 +489,10 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
                 if lib.sim_sample(ct.byref(inp)):raise RuntimeError('原生姿态估计拒绝样本（sim_sample）。检查采样间隔或控制器返回值。')
                 samples+=1
             if data.time-last_sample_t>2:raise RuntimeError('IMU 连续 2 秒无有效数据，已停止本次实验。')
-            if tick%10==0:
+            if tick%STEP_TICKS==0:
+                delta=balance_pwm(balance_target)-carriage_pwm
+                carriage_pwm+=max(-CG_PWM_STEP,min(CG_PWM_STEP,delta))
+                model.eq_data[balance_constraint,0]=balance_position(carriage_pwm)/1000
                 fill_input(.01)
                 code=lib.sim_step(ct.byref(inp),ct.byref(out))
                 if code:raise RuntimeError(f'原生控制器返回错误 {code}（sim_step）。')
@@ -337,6 +500,9 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
                     raise RuntimeError('控制器输出出现 NaN/Inf，已停止实验。')
                 if not (500<=out.pwm_us[0]<=2500 and 1130<=out.pwm_us[1]<=1870 and 0<=out.throttle_pct<=100):
                     raise RuntimeError('控制器输出超出舵机／油门范围，已停止实验。')
+                # 固件 100 Hz、双向 ESC 正向窗口 1500～1700 μs、每拍 5 μs。
+                throttle=(throttle+float(np.clip(out.throttle_pct-throttle,-2.5,2.5))
+                          if cfg.control_law=='torque' else out.throttle_pct)
             target=np.array([(out.pwm_us[0]-1500)*math.pi/1000+trim,
                              (out.pwm_us[1]-1500)*math.radians(270)/2000])
             desired_rate=np.clip((target-data.qpos[2:4])/cfg.servo_tau_s,
@@ -344,13 +510,16 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
             data.qfrc_applied[:]=0
             data.qfrc_applied[2:4]=np.clip(.08*(desired_rate-data.qvel[2:4]),-cfg.servo_torque_nm,cfg.servo_torque_nm)
             response=1-math.exp(-.001/cfg.motor_tau_s)
-            rpm+=(cfg.max_rpm*out.throttle_pct/100-rpm)*response
+            rpm+=(cfg.max_rpm*throttle/100-rpm)*response
+            # 将高速 RPM 缩为可见转速，4× 播放下仍能区分桨叶。
+            propeller_turns+=min(3.,rpm/3600)*model.opt.timestep
             if cfg.thrust_mode=='rpm_curve':force=thrust_at_rpm(cfg,rpm)
             else:
-                requested=cfg.max_thrust_n*(out.throttle_pct/100)**2
+                requested=cfg.max_thrust_n*(throttle/100)**2
                 force+=(requested-force)*response
             thrust_dir=data.xmat[thrust_body].reshape(3,3)@META['thrust_direction_in_link']
             mujoco.mj_applyFT(model,data,force*thrust_dir,np.zeros(3),data.site_xpos[thrust_site],thrust_body,data.qfrc_applied)
+            if cfg.control_law=='torque':motor_torque[:]=data.qfrc_applied[:2]
             if data.time<push_until:
                 mujoco.mj_applyFT(model,data,np.zeros(3),r@push,data.xpos[rocket],rocket,data.qfrc_applied)
             # 离线训练和对比可按时间施加机体系力矩；仍由同一 MuJoCo 模型计算。
@@ -361,23 +530,9 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
             mujoco.mj_step(model,data);tick+=1
             if not np.isfinite(data.qpos).all() or abs(data.qpos[:2]).max()>math.pi:
                 reason='failed';message='轴承转角超过 180°，结束本次姿态稳定测试。';break
-            if tick%20==0:
-                truth=lean(data.site_xmat[site].reshape(3,3));elapsed=time.perf_counter()-start_wall
-                packet={'kind':'frame','run_id':run_id,'status':'running','time':round(data.time,6),'control_law':cfg.control_law,
-                  'pose':poses(model,data),'x':float(truth[0]),'y':float(truth[1]),
-                  'thrust_origin':data.site_xpos[thrust_site].tolist(),
-                  'thrust_direction':(data.xmat[thrust_body].reshape(3,3)@META['thrust_direction_in_link']).tolist(),
-                  'tilt':math.degrees(math.acos(float(np.clip(data.site_xmat[site].reshape(3,3)[2,2],-1,1)))),
-                  'est_x':out.estimated_lean_deg[0],'est_y':out.estimated_lean_deg[1],
-                  'pwm':list(out.pwm_us),'servo_deg':[math.degrees(data.qpos[2]-trim)+180,math.degrees(data.qpos[3])+135],
-                  'thrust':force,'rpm':rpm,'throttle':out.throttle_pct,'pid':list(out.pid),'limited':bool(out.limited),
-                  'gyro':measured_gyro.tolist(),'accel':measured_accel.tolist(),
-                  'samples':samples,'age_ms':(data.time-last_sample_t)*1000,
-                  'rtf':data.time/max(elapsed,.001)}
-                history.append(packet.copy() if capture_pose else {k:v for k,v in packet.items() if k!='pose'});outbox.put(packet)
-            if cfg.realtime:
-                wait=start_wall+data.time-time.perf_counter()
-                if wait>.0001:time.sleep(min(wait,.01))
+            stepped=playback.advanced()
+            if stepped or (not playback.paused and tick%20==0) or data.time>=cfg.duration_s-1e-9:
+                publish(remember=True)
     except PreparationStopped:
         reason='stopped';message='已停止舵机预定位，实验未开始。'
     except Exception as exc:
@@ -385,11 +540,13 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
         if record:(folder/'error.log').write_text(traceback.format_exc(),encoding='utf-8')
     tail=history[-1] if history else {}
     tilt=np.array([p.get('tilt',math.hypot(p['x'],p['y'])) for p in history])
+    deviation=np.array([p['error_deg'] for p in history]) if cfg.control_law=='torque' else tilt
     settled=None
-    for i in range(max(0,len(tilt)-25)):
-        if np.max(tilt[i:])<2 and (len(tilt)-i)>=25:settled=history[i]['time'];break
+    for i in range(max(0,len(deviation)-25)):
+        if history[i]['time']>=last_target_s and np.max(deviation[i:])<2:
+            settled=history[i]['time'];break
     if reason=='completed' and settled is None:
-        message='实验运行结束，但姿态未持续稳定在 ±2° 内。'
+        message='实验运行结束，姿态未持续保持在目标误差 2° 内。'
     summary={'id':run_id,'status':reason,'message':message,'duration_s':tail.get('time',0),'sample_count':len(history),
       'peak_tilt_deg':float(tilt.max()) if len(tilt) else None,'rms_tilt_deg':float(np.sqrt(np.mean(tilt**2))) if len(tilt) else None,
       'final_tilt_deg':float(tilt[-1]) if len(tilt) else None,'settling_time_s':settled,
@@ -401,6 +558,10 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
     if cfg.control_law=='model' and reason!='error':
         from .model_control import model_compensation
         summary['model_compensation']=model_compensation(cfg)
+    if cfg.control_law=='torque' and len(deviation):
+        summary['target_deg']=[target_x,target_y]
+        summary['final_error_deg']=float(deviation[-1])
+        summary['rms_error_deg']=float(np.sqrt(np.mean(deviation**2)))
     if record:
         (folder/'run.json').write_text(json.dumps({'config':config,'build':build},ensure_ascii=False,indent=2),encoding='utf-8')
         (folder/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
@@ -427,7 +588,7 @@ class SimulationManager:
         self.run_id=time.strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:5]
         self.outbox=self.context.Queue();self.commands=self.context.Queue();self.done=False
         self.capture=[];self.current_config=cfg.model_dump();self.current_build=build
-        self.latest=idle_packet()|{'status':'starting','run_id':self.run_id,'time':0};self.last_update=time.monotonic()
+        self.latest=idle_packet()|{'status':'starting','run_id':self.run_id,'time':0,'playback_speed':cfg.playback_speed if cfg.realtime else 0.};self.last_update=time.monotonic()
         self.process=self.context.Process(target=run_experiment,args=(cfg.model_dump(),build,self.run_id,self.outbox,self.commands),daemon=True)
         self.process.start();return {'run_id':self.run_id,'status':'starting'}
     @synchronized
@@ -438,7 +599,9 @@ class SimulationManager:
                 except queue.Empty:break
                 self.last_update=time.monotonic()
                 if p['kind']=='frame':
-                    self.latest=p;self.capture.append({k:v for k,v in p.items() if k!='pose'})
+                    self.latest=p
+                    if p.get('phase')=='simulation' and p['time']>0 and (not self.capture or self.capture[-1]['time']!=p['time']):
+                        self.capture.append({k:v for k,v in p.items() if k!='pose'})
                 elif p['kind']=='status':self.latest|={'status':p['status']}
                 else:self.latest|=p;self.done=True
         if self.process and self.process.pid is not None and not self.done:
@@ -463,8 +626,16 @@ class SimulationManager:
         self.latest|={'kind':'done','status':'error','message':message,'summary':summary};self.done=True
     @synchronized
     def command(self,action,**values):
-        if self.process and self.process.is_alive():self.commands.put({'action':action,**values})
-        else:raise ValueError('当前没有运行中的实验。')
+        latest=self.poll()
+        if self.done or not self.process or not self.process.is_alive():
+            raise ValueError('当前没有运行中的实验。')
+        if action=='target' and (self.current_config['control_law']!='torque' or latest.get('phase')!='simulation'):
+            raise ValueError('只有正在运行的推力力矩实验可更新目标。')
+        if action=='step' and latest['status']!='paused':
+            raise ValueError('请先暂停实验，再单步推进。')
+        if action=='balance' and latest.get('phase')!='simulation':
+            raise ValueError('预定位结束后可以修改滑架位置。')
+        self.commands.put({'action':action,**values})
     @synchronized
     def close(self):
         if self.process and self.process.is_alive():

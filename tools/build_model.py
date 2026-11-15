@@ -5,6 +5,7 @@ CAD 变换按行向量存储，转成列向量时必须转置；已用 SolidWork
 """
 import csv,json,math,sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import xml.etree.ElementTree as ET
 
 import mujoco
@@ -62,7 +63,8 @@ base_cad[0]=np.concatenate(floor_points)[:,0].max()
 def world(p):return W@(np.asarray(p)-base_cad)
 
 anchors={'base':np.zeros(3),'outer_frame':world(pivot),'rocket_body':world(pivot),
-         'azimuth_stage':world(az_cad),'thrust_unit':world(el_cad)}
+         'azimuth_stage':world(az_cad),'thrust_unit':world(el_cad),
+         'balance_carriage':world(transform(C['04-舵机齿轮连接-2'])[:3,3])}
 solution=least_squares(lambda q:(rot(axis1,q[0])@rot(axis2,q[1])@nose)[:2],[0.,0.],xtol=1e-14,ftol=1e-14,gtol=1e-14)
 upright=solution.x
 assert (rot(axis1,upright[0])@rot(axis2,upright[1])@nose)[2]>.999999
@@ -70,6 +72,9 @@ thrust_p,thrust_a=axis_record('同心25',12)
 thrust_dir=W@motor[:3,:3]@thrust_a
 tilt_correction=math.atan2(np.dot(el_axis,np.cross(thrust_dir,nose)),np.dot(thrust_dir,nose))
 assert np.linalg.norm(rot(el_axis,tilt_correction)@thrust_dir-nose)<1e-6
+# 两个齿条导向配合面约束平移方向，重合48的端面法向即为齿条轴。
+cg_axis=W@np.array(mate('重合48')['entities'][1]['params'][3:6])
+cg_axis/=np.linalg.norm(cg_axis)
 
 def group(c):
     name=c['name']
@@ -83,7 +88,9 @@ def group(c):
         if any(rest.startswith(s) for s in ['01-旋转平台-','01-金属主舵盘-','01-M3 20尼龙套-',
                                            '01-45扭力PWM双轴舵机-']):return 'azimuth_stage'
         return 'rocket_body'
-    if name.startswith(('03-重力模块','03-10mm光杆','02-连接件','05-电子部分','04-直齿条','04-舵机齿轮连接','06-火箭顶锥')):
+    if name.startswith(('03-重力模块舵机-5/','04-舵机齿轮连接-')):
+        return 'balance_carriage'
+    if name.startswith(('03-10mm光杆','02-连接件','05-电子部分','04-直齿条','06-火箭顶锥')):
         return 'rocket_body'
     return 'base'
 
@@ -99,12 +106,23 @@ if not parameter_path.exists():
     },ensure_ascii=False,indent=2),encoding='utf-8')
 params=json.loads(parameter_path.read_text(encoding='utf-8'))
 meshes={k:[] for k in anchors}; items={k:[] for k in anchors}; manifest=[]
+propellers=[];thrust_housing=[]
+rail_spans={}
+rack_mesh=None;rocket_display=[]
 for c in D['components']:
     if c.get('type')!=1:continue
     m=MODELS[c['model_id']]; g=group(c);t=transform(c)
     mesh=trimesh.load_mesh(ROOT/'meshes'/m['mesh'],process=False)
     mesh.vertices=(mesh.vertices@t[:3,:3].T+t[:3,3]-base_cad)@W.T-anchors[g]
     meshes[g].append(mesh)
+    if g=='rocket_body':
+        if c['name']=='04-直齿条.step-1':rack_mesh=mesh
+        else:rocket_display.append(mesh)
+    if c['name'] in ('04-直齿条.step-1','04-舵机齿轮连接-2'):
+        along=(mesh.vertices+anchors[g]-anchors['rocket_body'])@cg_axis
+        rail_spans[c['name']]=[along.min(),along.max()]
+    if g=='thrust_unit':
+        (propellers if c['name'].split('/')[-1].startswith('01-螺旋桨-') else thrust_housing).append(mesh)
     raw=m['mass'];scale=1.;basis='CAD default; hardware mass unverified'
     if m['id'] in params['petg_model_ids']:
         scale=params['petg_density_kg_m3']/raw['density']*params['printed_cad_volume_factor'];basis='PETG nominal density; CAD solid volume'
@@ -121,12 +139,37 @@ for c in D['components']:
     manifest.append({'component':c['name'],'model_id':m['id'],'source_path':m['path'],
                      'link':g,'mass_kg':mass,'mass_basis':basis,'raw_mesh':m['mesh']})
 
+# 浏览器拆开转子和外壳；MJCF/URDF 仍使用原合并网格和刚体质量。
+assert len(propellers)==1 and thrust_housing
+shaft_point=world(motor[:3,:3]@thrust_p+motor[:3,3])-anchors['thrust_unit']
+trimesh.util.concatenate(thrust_housing).export(ROOT/'meshes/thrust_housing.stl')
+blade=propellers[0].copy()
+blade.apply_translation(-shaft_point)
+blade.export(ROOT/'meshes/propeller.stl')
+assert rack_mesh is not None and rocket_display
+rack_mesh.export(ROOT/'meshes/balance_rack.stl')
+trimesh.util.concatenate(rocket_display).export(ROOT/'meshes/rocket_display.stl')
+(ROOT/'meshes/propeller_scene.json').write_text(json.dumps({
+    'pivot_m':shaft_point.tolist(),'shaft_axis':thrust_dir.tolist(),'elevation_axis':el_axis.tolist(),
+},indent=2),encoding='utf-8')
+if '--visuals-only' in sys.argv:
+    print('STL visual split',len(propellers[0].faces),'propeller triangles',sum(len(m.faces) for m in thrust_housing),'housing triangles')
+    sys.exit(0)
+
+# 导向件完整留在齿条投影内，端点向内取整至毫米。实物行程需要另测。
+rail_lo,rail_hi=rail_spans['04-直齿条.step-1']
+guide_lo,guide_hi=rail_spans['04-舵机齿轮连接-2']
+cg_min_mm=math.ceil((rail_lo-guide_lo)*1000)
+cg_max_mm=math.floor((rail_hi-guide_hi)*1000)
+assert cg_min_mm<0<cg_max_mm
 joints=[('stand_outer','base','outer_frame',axis1,float(upright[0]),'continuous'),
         ('stand_inner','outer_frame','rocket_body',axis2,float(upright[1]),'continuous'),
         ('tvc_azimuth','rocket_body','azimuth_stage',az_axis,0.,'revolute'),
-        ('tvc_elevation','azimuth_stage','thrust_unit',el_axis,tilt_correction,'revolute')]
+        ('tvc_elevation','azimuth_stage','thrust_unit',el_axis,tilt_correction,'revolute'),
+        ('cg_slide','rocket_body','balance_carriage',cg_axis,0.,'prismatic')]
 colors={'base':[.65,.68,.72,1],'outer_frame':[.42,.46,.52,1],
-        'rocket_body':[.08,.43,.68,1],'azimuth_stage':[.12,.16,.22,1],'thrust_unit':[.9,.4,.09,1]}
+        'rocket_body':[.08,.43,.68,1],'azimuth_stage':[.12,.16,.22,1],'thrust_unit':[.9,.4,.09,1],
+        'balance_carriage':[.9,.73,.28,1]}
 robot=ET.Element('robot',name='tvc_bearing_bench')
 robot.append(ET.Comment('SI units. Two passive bearing axes, two finite-range TVC axes. Hardware masses and servo torque not calibrated.'))
 compiler=add(add(robot,'mujoco'),'compiler',discardvisual='false',fusestatic='false',balanceinertia='false')
@@ -156,10 +199,15 @@ for name,parent,child,axis,offset,kind in joints:
         velocity=math.radians(54 if name=='tvc_azimuth' else 40.5)
         # 未提供扭矩实测值，effort=0 明确不宣称执行器动力学已标定。
         add(j,'limit',lower=f'{-limit:.12g}',upper=f'{limit:.12g}',effort='0',velocity=f'{velocity:.12g}')
+    elif kind=='prismatic':
+        add(j,'limit',lower=cg_min_mm/1000,upper=cg_max_mm/1000,effort='0',velocity='0')
 urdf_path=ROOT/'urdf/tvc_bench.urdf';save_xml(robot,urdf_path)
-model=mujoco.MjModel.from_xml_path(str(urdf_path))
-mujoco.mj_saveLastXML(str(ROOT/'work/imported_urdf.xml'),model)
-scene=ET.parse(ROOT/'work/imported_urdf.xml').getroot()
+assets={f'{g}.stl':(ROOT/'meshes'/f'{g}.stl').read_bytes() for g in anchors}
+model=mujoco.MjModel.from_xml_string(urdf_path.read_text(encoding='utf-8'),assets)
+with TemporaryDirectory(prefix='tvc-model-') as directory:
+    imported=Path(directory)/'imported_urdf.xml'
+    mujoco.mj_saveLastXML(str(imported),model)
+    scene=ET.parse(imported).getroot()
 scene.set('model','TVC bearing bench - geometry validated, mass provisional')
 comp=scene.find('compiler');comp.set('meshdir','../meshes')
 for mesh in scene.findall('asset/mesh'):mesh.set('file',Path(mesh.get('file')).name)
@@ -177,7 +225,12 @@ for name,parent,child,axis,offset,kind in joints:
     if kind=='revolute':
         limit=math.pi if name=='tvc_azimuth' else math.radians(50)
         j.set('range',nums([-limit,limit]))
+    elif kind=='prismatic':
+        j.set('range',nums([cg_min_mm/1000,cg_max_mm/1000]))
 add(scene,'option',timestep='0.001',gravity='0 0 -9.80665',integrator='implicitfast')
+# 位置舵机由滑移约束跟随带限速的参考位置；重力和反力仍由 MuJoCo 求解。
+add(add(scene,'equality'),'joint',name='cg_position_hold',joint1='cg_slide',
+    polycoef='0 0 0 0 0',solref='.006 1',solimp='.999 .9999 .0001')
 visual=add(scene,'visual');add(visual,'global',offwidth='1600',offheight='1200')
 stat=scene.find('statistic')
 if stat is None:stat=add(scene,'statistic')
@@ -197,8 +250,8 @@ body_y=np.cross(body_z,body_x);brot=np.column_stack((body_x,body_y,body_z))
 quat=Rotation.from_matrix(brot).as_quat()[[3,0,1,2]]
 add(body,'site',name='body_reference',pos='0 0 0',quat=nums(quat),size='.003',rgba='.1 1 .1 1')
 sensors=add(scene,'sensor');add(sensors,'gyro',name='ideal_gyro',site='body_reference');add(sensors,'accelerometer',name='ideal_accel',site='body_reference')
-keyframes=add(scene,'keyframe');add(keyframes,'key',name='upright',qpos='0 0 0 0')
-cad_q=[-float(upright[0]),-float(upright[1]),0.,-tilt_correction]
+keyframes=add(scene,'keyframe');add(keyframes,'key',name='upright',qpos='0 0 0 0 0')
+cad_q=[-float(upright[0]),-float(upright[1]),0.,-tilt_correction,0.]
 add(keyframes,'key',name='cad_saved_pose',qpos=nums(cad_q))
 (ROOT/'mjcf').mkdir(exist_ok=True);save_xml(scene,ROOT/'mjcf/tvc_bench.xml')
 meta={'source':D['source'],'coordinate_mapping':'world=(CAD_Y,-CAD_Z,-CAD_X), ground at bottom extrusion',
@@ -208,7 +261,8 @@ meta={'source':D['source'],'coordinate_mapping':'world=(CAD_Y,-CAD_Z,-CAD_X), gr
       'thrust_direction_in_link':thrust_dir.tolist(),'body_z_in_link':nose.tolist(),
       'link_anchor_world_m':{k:v.tolist() for k,v in anchors.items()},'inertials':inertials,
       'mass_calibrated':False,'servo_torque_calibrated':False,'self_collision_enabled':False,
-      'balance_carriage':'fixed at CAD saved position; outside two-axis stand scope'}
+      'balance_carriage':{'axis_in_link':cg_axis.tolist(),'min_mm':cg_min_mm,'max_mm':cg_max_mm,
+                          'reference':'CAD saved position; rack projection limits, hardware unverified'}}
 (ROOT/'reports/model_metadata.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2),encoding='utf-8')
 (ROOT/'reports/component_manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
 with (ROOT/'reports/component_manifest.csv').open('w',encoding='utf-8-sig',newline='') as f:

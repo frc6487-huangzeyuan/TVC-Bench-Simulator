@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {Activity,Download,Square} from 'lucide-react';
 import {CartesianGrid,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
+import ServoCalibrationPanel,{type ServoCalibration} from './ServoCalibrationPanel';
 import './real-device.css';
 
 type Engine=Record<string,(...args:any[])=>any>;
@@ -10,20 +11,32 @@ type Snapshot={mode:string|null;connecting:boolean;tele:Packet|null;lastRx:numbe
 type Entry={id:string;status:string;transport:string;count:number;started_utc:string;firmware?:string};
 type Live={packet:Packet;transport:'usb'|'wifi';received:number};
 type Point={time:number;x:number;y:number};
+type CgServo={enabled:boolean;command_us:number;direction:-1|0|1;max_us?:number};
 const format=(n:unknown,d=2)=>typeof n==='number'&&Number.isFinite(n)?n.toFixed(d):'—';
 const vector=(v:unknown,d=2)=>Array.isArray(v)&&v.length===3?v.map(n=>format(n,d)).join(' / '):'—';
 async function request(path:string,body?:unknown){const r=await fetch('/api/real'+path,body===undefined?undefined:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(typeof data.detail==='string'?data.detail:'请求失败');return data;}
 
 const pidFields=[['kp-x','X · Kp'],['ki-x','X · Ki'],['kd-x','X · Kd'],['kp-y','Y · Kp'],['ki-y','Y · Ki'],['kd-y','Y · Kd'],['max-tilt','最大修正 / °'],['azimuth-zero','方位零位 / °']] as const;
-const throttleFields=[['throttle-base','基础油门 / %',0],['throttle-gain','倾斜增益 / %每度',1],['throttle-max','油门上限 / %',30],['throttle-deadband','倾斜死区 / °',2],['throttle-ramp','变化速度 / %每秒',10]] as const;
+const throttleFields=[['throttle-base','基础油门 / %',0],['throttle-gain','倾斜增益 / %每度',1],['throttle-rate-gain','角速度增益 / %每（°/s）',0.02],['throttle-max','油门上限 / %',30],['throttle-deadband','倾斜死区 / °',2],['throttle-ramp','变化速度 / %每秒',10]] as const;
+const torqueFields=[
+ ['full_torque_nm','满油门推力 × 有效力臂 / N·m',0.001,1000],
+ ['base_pct','基准油门 / %',0.1,100],['max_pct','油门上限 / %',0.1,100],
+ ['kp_x','X · Kp',0.0001,100],['ki_x','X · Ki',0,100],['kd_x','X · Kd',0,100],
+ ['kp_y','Y · Kp',0.0001,100],['ki_y','Y · Ki',0,100],['kd_y','Y · Kd',0,100],
+] as const;
+const feedforwardFields=['X 配平 / N·m','Y 配平 / N·m','X·X','X·Y','Y·X','Y·Y'];
 
 export default function RealDevice({backendConnected,onActivityChange}:{backendConnected:boolean;onActivityChange:(active:boolean)=>void}){
  const engine=useRef<Engine|null>(null),socket=useRef<WebSocket|null>(null),liveRef=useRef<Live|null>(null),recordId=useRef(''),trendKey=useRef('');
  const preview=useRef<((rotation:number[],azimuth:number,elevation:number,options:object)=>string)|null>(null);
  const [snap,setSnap]=useState<Snapshot|null>(null),[live,setLive]=useState<Live|null>(null),[now,setNow]=useState(performance.now()),[points,setPoints]=useState<Point[]>([]);
  const [records,setRecords]=useState<Entry[]>([]),[recording,setRecording]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [servoX,setServoX]=useState(180),[servoY,setServoY]=useState(135),[motor,setMotor]=useState(25),[autoMotor,setAutoMotor]=useState(0),[propConfirmed,setPropConfirmed]=useState(false);
- const [pidDirty,setPidDirty]=useState(false),[pidValues,setPidValues]=useState<Record<string,number>>({'kp-x':.6,'ki-x':0,'kd-x':.03,'kp-y':.6,'ki-y':0,'kd-y':.03,'max-tilt':15,'azimuth-zero':180,'sign-x':1,'sign-y':1});
+ const [servoX,setServoX]=useState(180),[servoY,setServoY]=useState(0),[motor,setMotor]=useState(25),[autoMotor,setAutoMotor]=useState(0),[propConfirmed,setPropConfirmed]=useState(false);
+ const [showServoCalibration,setShowServoCalibration]=useState(false);
+ const [torqueValues,setTorqueValues]=useState<Record<string,string>>({});
+ const [feedforward,setFeedforward]=useState<string[]>(Array(6).fill('0'));
+ const [targetX,setTargetX]=useState('0'),[targetY,setTargetY]=useState('0');
+ const [pidDirty,setPidDirty]=useState(false),[pidValues,setPidValues]=useState<Record<string,number>>({'kp-x':.6,'ki-x':0,'kd-x':.03,'kp-y':.6,'ki-y':0,'kd-y':.03,'max-tilt':15,'azimuth-zero':180,'sign-x':1,'sign-y':-1});
  const refresh=()=>request('/records').then(setRecords).catch(e=>setError(e.message));
  useEffect(()=>{let disposed=false;void refresh();const timer=setInterval(()=>setNow(performance.now()),500);
   const onState=(e:Event)=>setSnap((e as CustomEvent<Snapshot>).detail);
@@ -56,7 +69,26 @@ export default function RealDevice({backendConnected,onActivityChange}:{backendC
  const outputActive=!!(tele?.outputs?.servo_enabled||tele?.outputs?.esc_armed||tele?.outputs?.esc_arming);
  const ready=!!(fresh&&tele&&!tele.fault&&!tele.calibrating&&tele.control_imu?.valid),manual=tele?.operating_mode==='MANUAL',attitude=tele?.operating_mode==='ATTITUDE';
  const world=!!tele?.world?.valid,auto=!!tele?.control?.auto_enabled,armed=!!tele?.outputs?.esc_armed,arming=!!tele?.outputs?.esc_arming,servoOn=!!tele?.outputs?.servo_enabled&&!auto;
+ const torque=tele?.control?.thrust_torque;
+ const torqueReady=ready&&attitude&&world&&tele?.control?.mount_ready&&tele?.control?.tilt_valid;
+ const targetsValid=[targetX,targetY].every(v=>v.trim()!==''&&Number.isFinite(Number(v))&&Math.abs(Number(v))<=20);
+ const cg=tele?.outputs?.cg_servo as CgServo|undefined,cgMoving=!!cg?.direction,cgJogging=snap?.operation==='cg-jog';
+ const canAdjustCg=cg?.max_us===2000&&ready&&!armed&&!arming&&!opBusy;
+ const canJogCg=cg?.max_us===2000&&cg.enabled&&ready&&!armed&&!arming&&(!opBusy||cgJogging);
  const servoUs=tele?.outputs?.servo_us,rotation=tele?.world?.r_bw;
+ const azimuthCenter=tele?.control?.azimuth_zero_deg??180;
+ const servoCalibration=tele?.control?.servo_calibration as ServoCalibration|undefined;
+ const servoPwm=tele?.outputs?.servo_pwm_us;
+ const canCaptureServo=manual&&servoOn&&!opBusy&&Array.isArray(servoPwm)&&servoPwm.length===2&&servoPwm.every((v:unknown)=>typeof v==='number'&&v>=500&&v<=2500);
+ const wasServoOn=useRef(false);
+ useEffect(()=>{
+  const enabled=manual&&servoOn;
+  if(enabled&&!wasServoOn.current&&Array.isArray(servoUs)&&servoUs.length===2){
+   setServoX(Math.round((servoUs[0]-500)*360/2000));
+   setServoY(Math.round(((servoUs[1]-500)*270/2000-135)*10)/10);
+  }
+  wasServoOn.current=enabled;
+ },[manual,servoOn,servoUs]);
  const scene=fresh&&world&&preview.current&&Array.isArray(rotation)&&rotation.length===9&&Array.isArray(servoUs)&&servoUs.length===2
   ?preview.current(rotation,(servoUs[0]-500)*360/2000,(servoUs[1]-500)*270/2000,{zero:tele?.control?.azimuth_zero_deg??180}):'';
  useEffect(()=>{if(!snap?.autoFanWanted)setAutoMotor(0);},[snap?.autoFanWanted]);
@@ -64,7 +96,13 @@ export default function RealDevice({backendConnected,onActivityChange}:{backendC
   setPidValues({'kp-x':pid.x.kp,'ki-x':pid.x.ki,'kd-x':pid.x.kd,'kp-y':pid.y.kp,'ki-y':pid.y.ki,'kd-y':pid.y.kd,'max-tilt':pid.output_limit_deg,'azimuth-zero':c.azimuth_zero_deg,'sign-x':c.sign_x,'sign-y':c.sign_y});
  },[tele?.config_rev,fresh,pidDirty]);
  const invoke=(label:string,fn:string,...args:any[])=>{setError('');setNotice('');const e=engine.current;if(!e){setError('控制代码尚未加载。');return;}void e.run(label,()=>e[fn](...args));};
- const applyPid=async()=>{setError('');try{if(!engine.current)throw new Error('控制代码尚未加载。');await engine.current.applyPid();setPidDirty(false);setNotice('PID 已由设备回传确认。');}catch(e){setError(e instanceof Error?e.message:String(e));}};
+ const releaseCg=()=>{const e=engine.current;if(e)void e.run('',()=>e.releaseCgServo());};
+ const cgJogButton=(direction:1|-1,label:string)=><button className="button secondary compact cg-jog" disabled={!canJogCg||(!cgJogging&&(direction>0?cg.command_us>=2000:cg.command_us<=500))}
+  onPointerDown={e=>{if(!e.isPrimary||e.button!==0)return;e.currentTarget.setPointerCapture(e.pointerId);invoke('','jogCgServo',direction);}}
+  onPointerUp={releaseCg} onPointerCancel={releaseCg} onLostPointerCapture={releaseCg} onBlur={releaseCg}
+  onKeyDown={e=>{if(e.key!==' '&&e.key!=='Enter')return;e.preventDefault();if(!e.repeat)invoke('','jogCgServo',direction);}}
+  onKeyUp={e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();releaseCg();}}}>{label}</button>;
+ const applyPid=async()=>{setError('');try{if(!engine.current)throw new Error('控制代码尚未加载。');await engine.current.applyPid();setPidDirty(false);setNotice('PID 已由设备回传确认。');}catch(e){const message=e instanceof Error?e.message:String(e);if(engine.current?.responseNoticeType(e)==='warning')setNotice(message);else setError(message);}};
  const start=async()=>{if(!liveRef.current||performance.now()-liveRef.current.received>=2500)return;setBusy(true);setError('');let started=false;
   try{const meta=await request('/record/start',{transport:liveRef.current.transport});started=true;recordId.current=meta.id;
    const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/real/record/ws/${encodeURIComponent(meta.id)}`);socket.current=ws;
@@ -88,20 +126,66 @@ export default function RealDevice({backendConnected,onActivityChange}:{backendC
   <section className="panel real-preview"><h2>姿态与云台指向预览</h2><p className="field-note">箭体使用飞控回传的姿态估计，云台使用 PWM 对应指令角；图形不代表舵机实际位置或实测推力。</p>{scene?<svg viewBox="0 0 1000 530" role="img" aria-label="真实设备姿态估计与云台指令预览" dangerouslySetInnerHTML={{__html:scene}}/>:<div className="real-preview-empty">等待有效的设备姿态与舵机指令。</div>}</section>
   <section className="panel real-controls"><div className="real-heading"><div><h2>飞控操作</h2><p>设备的校准、模式切换与控制状态均以固件回传为准。</p></div><div className="real-actions"><button className="button secondary compact" disabled={!fresh||opBusy} onClick={()=>invoke('已切换到姿态模式。','setView','auto')}>姿态回中</button><button className="button secondary compact" disabled={!fresh||opBusy} onClick={()=>invoke('已切换到手动模式。','setView','manual')}>手动与行程</button></div></div>
    <div className="real-control-grid"><div><h3>姿态与 IMU</h3><p className="field-note">当前模式：{fresh?(attitude?'姿态回中':'手动与行程'):'等待设备'} · 安装偏角 {fresh?format(tele?.control?.mount_yaw_deg,1)+'°':'—'}</p>{fresh&&attitude&&typeof tele?.control?.preposition_active!=='boolean'&&<p className="field-note">当前固件不支持电机启动前预定位；请更新主控后再启动姿态模式电机。</p>}{fresh&&auto&&!armed&&!arming&&<p className="field-note" role="status">舵机正在根据实时姿态持续纠偏；电机尚未启动。启动时将按最新姿态再次准备。</p>}{fresh&&tele?.control?.preposition_active&&<p className="field-note" role="status">启动前舵机预定位中，电机保持停止。指令到位后按预计时间等待；没有位置反馈，不能确认机械已到位。</p>}
-    <div className="real-actions"><button className="button secondary compact" disabled={!(fresh&&attitude&&!tele?.calibrating&&!outputActive&&!opBusy)} onClick={()=>invoke('正在校准，请保持竖直静止。','recalibrate')}>竖直静止校准</button><button className="button secondary compact" disabled={!(fresh&&!opBusy&&!outputActive&&!tele?.calibrating)} onClick={()=>invoke('已切换控制源，等待校准。','switchImuSource',tele?.control?.source_id===1?2:1)}>切换至 IMU{tele?.control?.source_id===1?'2':'1'}</button></div>
+    <div className="real-actions"><button className="button secondary compact" disabled={!(fresh&&attitude&&!tele?.calibrating&&!outputActive&&!cg?.enabled&&!opBusy)} onClick={()=>invoke('正在校准，请保持竖直静止。','recalibrate')}>竖直静止校准</button><button className="button secondary compact" disabled={!(fresh&&tele?.control?.gravity_reference&&!tele?.calibrating&&!outputActive&&!cg?.enabled&&!opBusy)} onClick={()=>invoke('已恢复当前 IMU 的默认校准。','restoreCalibration')}>恢复默认校准</button><button className="button secondary compact" aria-expanded={showServoCalibration} aria-controls="servo-calibration" onClick={()=>setShowServoCalibration(open=>!open)}>方向标定</button><button className="button secondary compact" disabled={!(fresh&&!opBusy&&!outputActive&&!tele?.calibrating)} onClick={()=>invoke('已切换控制源。','switchImuSource',tele?.control?.source_id===1?2:1)}>切换至 IMU{tele?.control?.source_id===1?'2':'1'}</button></div>
     <p className="field-note">IMU1：{fresh?sensor(tele?.imus?.[0]):'等待数据'}<br/>加速度 / 角速度：{fresh&&tele?.imus?.[0]?.valid?vector(tele.imus[0].a):'—'} g · {fresh&&tele?.imus?.[0]?.valid?vector(tele.imus[0].g,1):'—'} °/s<br/>IMU2：{fresh?sensor(tele?.imu2):'等待数据'}<br/>加速度 / 角速度：{fresh&&tele?.imu2?.valid?vector(tele.imu2.a_g):'—'} g · {fresh&&tele?.imu2?.valid?vector(tele.imu2.g_dps,1):'—'} °/s</p>
-    <div className="real-actions"><button className="button primary compact" disabled={!(ready&&attitude&&world&&tele?.control?.mount_ready&&tele?.control?.tilt_valid&&!auto&&(!armed&&!arming||tele?.control?.auto_motor_allowed)&&!opBusy)} onClick={()=>invoke('姿态回中已启动。','startAutomatic')}>{snap?.autoThrottleWanted?'开始回中 + 自动油门':'开始姿态回中'}</button><button className="button secondary compact" disabled={!(auto||snap?.autoFanWanted||snap?.autoThrottleWanted||armed||arming||snap?.operation==='auto'||snap?.operation==='auto-motor')} onClick={()=>invoke('自动控制已停止。','stopAutomatic')}>停止自动控制</button></div>
-   </div><div><h3>手动舵机</h3><div className="real-actions"><button className="button secondary compact" disabled={!(ready&&manual&&!servoOn&&!opBusy)} onClick={()=>{setServoX(180);setServoY(135);invoke('舵机已启用。','enableServos');}}>启用舵机</button><button className="button secondary compact" disabled={!(servoOn||snap?.operation==='servo')} onClick={()=>invoke('舵机已停止。','disableServos')}>停止舵机</button><button className="button secondary compact" disabled={!(manual&&ready&&servoOn)} onClick={()=>{setServoX(180);setServoY(135);invoke('已发送舵机回中指令。','centerServo');}}>机械回中</button></div>
-    <label>方位 {servoX}°<input id="servo-x" type="range" min="0" max="360" value={servoX} disabled={!(manual&&ready&&servoOn)} onChange={e=>{setServoX(Number(e.target.value));engine.current?.queueServo();}}/></label>
-    <label>俯仰 {servoY}°<input id="servo-y" type="range" min="85" max="185" value={servoY} disabled={!(manual&&ready&&servoOn)} onChange={e=>{setServoY(Number(e.target.value));engine.current?.queueServo();}}/></label>
+    <div className="real-actions"><button className="button primary compact" disabled={!(ready&&attitude&&world&&tele?.control?.mount_ready&&tele?.control?.tilt_valid&&!auto&&(!armed&&!arming||tele?.control?.auto_motor_allowed)&&!opBusy)} onClick={()=>invoke('姿态回中已启动。','startAutomatic')}>{snap?.autoThrottleWanted?'开始回中 + 自动油门':torque?'仅舵机回中':'开始姿态回中'}</button><button className="button secondary compact" disabled={!(auto||snap?.autoFanWanted||snap?.autoThrottleWanted||armed||arming||snap?.operation==='auto'||snap?.operation==='auto-motor')} onClick={()=>invoke('自动控制已停止。','stopAutomatic')}>停止自动控制</button></div>
+    {attitude&&torque&&<section>
+     <h3>推力力矩稳姿</h3>
+     <div className="real-input-grid">
+      <label>目标 X 倾角 / °<input type="number" min="-20" max="20" step="0.1" value={targetX} onChange={e=>setTargetX(e.target.value)} disabled={opBusy}/></label>
+      <label>目标 Y 倾角 / °<input type="number" min="-20" max="20" step="0.1" value={targetY} onChange={e=>setTargetY(e.target.value)} disabled={opBusy}/></label>
+     </div>
+     <p className="field-note">设备目标 {format(torque.target_deg?.[0],1)}° / {format(torque.target_deg?.[1],1)}° · 估计姿态 {format(torque.lean_deg?.[0],1)}° / {format(torque.lean_deg?.[1],1)}°</p>
+     {torque.active&&<p className="field-note">请求力矩 {format(torque.requested_nm?.[0],3)} / {format(torque.requested_nm?.[1],3)} N·m · 目标油门 {format(torque.throttle_target_pct,1)}%{torque.limited?' · 输出受限':''}</p>}
+     {torque.azimuth_rewind&&<p className="field-note" role="status">方位正在回初始位，沿当前可用方向限幅纠偏。</p>}
+     <form onSubmit={e=>{e.preventDefault();if(targetsValid&&torqueReady&&!cgMoving&&!outputActive&&!opBusy)
+      invoke('推力力矩稳姿已启动。','startThrustTorque',{...Object.fromEntries(torqueFields.map(([key])=>[key,Number(torqueValues[key])])),feedforward:feedforward.map(Number)},Number(targetX),Number(targetY));}}>
+      <details open={!torque.active&&!outputActive||undefined}><summary>推力标定与力矩 PID</summary>
+       <p className="field-note">采用台架实测的推力、力臂和油门范围。P、I、D 的单位分别为 N·m/°、N·m/(°·s)、N·m·s/°。</p>
+       <div className="real-input-grid">{torqueFields.map(([key,label,min,max])=><label key={key}>{label}<input required type="number" min={min} max={max} step="any" value={torqueValues[key]??''} disabled={outputActive||opBusy}
+        onChange={e=>setTorqueValues(v=>({...v,[key]:e.target.value}))}/></label>)}</div>
+       <details><summary>配平和重力补偿（可选）</summary><p className="field-note">矩阵行对应两路输出力矩，列对应 X/Y 机体倾角，单位 N·m/°。</p>
+        <div className="real-input-grid">{feedforwardFields.map((label,i)=><label key={label}>{label}<input type="number" step="any" value={feedforward[i]}
+         disabled={outputActive||opBusy} onChange={e=>setFeedforward(a=>a.map((value,j)=>i===j?e.target.value:value))}/></label>)}</div>
+       </details>
+      </details>
+      <div className="real-actions">{torque.active?<button type="button" className="button primary compact" disabled={!targetsValid||opBusy}
+       onClick={()=>invoke('目标倾角已由设备确认。','setAttitudeTarget',Number(targetX),Number(targetY))}>更新目标角</button>:
+       <button type="submit" className="button primary compact" disabled={!torqueReady||cgMoving||outputActive||opBusy||!targetsValid}>启动推力稳姿</button>}
+       <button type="button" className="button secondary compact" disabled={!(torque.prepared||snap?.operation==='torque')}
+        onClick={()=>invoke('推力力矩稳姿已停止。','stopAutomatic')}>停止推力稳姿</button></div>
+     </form>
+    </section>}
+    {fresh&&tele?.control?.gravity_reference&&<p className="field-note">重力参考 {tele.calibrating?'正在静止校准':tele.control.gravity_reference==='MANUAL'?'手动校准':'默认 9.8 m/s²'}{!tele.calibrating&&!world?' · 等待稳定采样':''}</p>}
+   </div><div><h3>手动舵机</h3><div className="real-actions"><button className="button secondary compact" disabled={!(ready&&manual&&!servoOn&&!opBusy)} onClick={()=>invoke('舵机已启用。','enableServos')}>启用舵机</button><button className="button secondary compact" disabled={!(servoOn||snap?.operation==='servo')} onClick={()=>invoke('舵机已停止。','disableServos')}>停止舵机</button><button className="button secondary compact" disabled={!(manual&&ready&&servoOn)} onClick={()=>{setServoX(azimuthCenter);setServoY(0);invoke('已发送舵机回中指令。','centerServo');}}>机械回中</button></div>
+    {servoCalibration&&<p className="field-note">中位输出刻度 {servoCalibration.azimuth_deg}° 方位 / {servoCalibration.elevation_deg}° 俯仰</p>}
+    <label>方位 {servoX.toFixed(1)}°<input id="servo-x" type="range" min="0" max="360" step="0.2" value={servoX} disabled={!(manual&&ready&&servoOn&&!opBusy)} onInput={e=>{setServoX(e.currentTarget.valueAsNumber);engine.current?.queueServo();}} onPointerUp={()=>engine.current?.flushServo()}/></label>
+    <label>俯仰 {servoY.toFixed(1)}°<input id="servo-y" type="range" min={Array.isArray(tele?.outputs?.elevation_limits_deg)?tele.outputs.elevation_limits_deg[0]-135:-20} max={Array.isArray(tele?.outputs?.elevation_limits_deg)?tele.outputs.elevation_limits_deg[1]-135:20} step="0.2" value={servoY} disabled={!(manual&&ready&&servoOn&&!opBusy)} onInput={e=>{setServoY(e.currentTarget.valueAsNumber);engine.current?.queueServo();}} onPointerUp={()=>engine.current?.flushServo()}/></label>
+   </div><div className="cg-servo-panel"><h3>可动重心 · GPIO 7</h3>
+    <p className="field-note">{!fresh?'连接飞控后可调节。':!cg?'需要支持重心舵机的固件。':cg.enabled?`位置 PWM ${cg.command_us} μs · ${cg.direction>0?'正向调节':cg.direction<0?'反向调节':'保持'}`:`启用后发送 ${cg.command_us} μs。`}</p>
+    <div className="real-actions">
+     <button className="button secondary compact" disabled={!canAdjustCg||cg.enabled} onClick={()=>invoke('重心舵机已启用。','enableCgServo')}>启用</button>
+     {cgJogButton(1,'正转')}{cgJogButton(-1,'反转')}
+     <button className="button secondary compact" disabled={!cgMoving&&!cgJogging} onClick={()=>invoke('已保持当前重心舵机指令。','stopCgServo')}>停止</button>
+     <button className="button secondary compact" disabled={!cg?.enabled||opBusy||armed||arming} onClick={()=>invoke('重心舵机已停用。','stopCgServo',true)}>停用</button>
+    </div>
+    <p className="field-note">{cg&&cg.max_us!==2000?'更新固件后可使用 500～2000 μs 限位。':'范围 500～2000 μs。松开按键后保持当前指令。'}</p>
    </div><div><h3>手动电机</h3><label><input id="prop-confirm" type="checkbox" checked={propConfirmed} onChange={e=>setPropConfirmed(e.target.checked)}/> 已拆除桨叶，可进行电机测试</label><label>速度指令 {motor}%<input id="motor-speed" type="range" min="0" max="100" value={motor} disabled={!(manual&&ready&&armed)} onChange={e=>{setMotor(Number(e.target.value));engine.current?.queueMotor();}}/></label>
-    <div className="real-actions"><button className="button primary compact" disabled={!(ready&&manual&&propConfirmed&&!armed&&!arming&&!opBusy)} onClick={()=>invoke('电机已按当前速度启动。','startMotor')}>启动电机</button><button className="button secondary compact" disabled={!(armed||arming||tele?.outputs?.esc_signal_enabled||snap?.operation==='motor')} onClick={()=>invoke('电机已停止。','stopMotor')}>停止电机</button></div>
+    <div className="real-actions"><button className="button primary compact" disabled={!(ready&&manual&&propConfirmed&&!armed&&!arming&&!opBusy&&!cgMoving)} onClick={()=>invoke('电机已按当前速度启动。','startMotor')}>启动电机</button><button className="button secondary compact" disabled={!(armed||arming||tele?.outputs?.esc_signal_enabled||snap?.operation==='motor')} onClick={()=>invoke('电机已停止。','stopMotor')}>停止电机</button></div>
    </div><div><h3>姿态模式风扇</h3><label><input id="auto-motor-enable" type="checkbox" checked={!!snap?.autoFanWanted} disabled={!!snap?.autoThrottleWanted||!!tele?.control?.tilt_throttle?.enabled||!(fresh&&attitude&&((ready&&world&&!opBusy)||snap?.autoFanWanted))} onChange={()=>invoke('风扇许可已更新。','toggleAutoMotor')}/> 允许独立手动调速</label>
     <label>速度指令 {autoMotor}%<input id="auto-motor-speed" type="range" min="0" max="100" value={autoMotor} disabled={!!tele?.control?.tilt_throttle?.enabled||!(ready&&attitude&&tele?.control?.auto_motor_allowed&&snap?.autoFanWanted&&armed&&!opBusy)} onChange={e=>{setAutoMotor(Number(e.target.value));engine.current?.queueAutoMotor();}}/></label>
     <div className="real-actions"><button className="button primary compact" disabled={!!snap?.autoThrottleWanted||!!tele?.control?.tilt_throttle?.enabled||!(ready&&attitude&&world&&tele?.control?.auto_motor_allowed&&snap?.autoFanWanted&&!armed&&!arming&&!opBusy)} onClick={()=>invoke('风扇已启用。','startAutoMotor')}>启动风扇</button><button className="button secondary compact" disabled={!(attitude&&(armed||arming||snap?.operation==='auto-motor'))} onClick={()=>invoke('风扇已停止。','stopMotor')}>停止风扇</button></div>
    </div></div>
-   <details><summary>姿态回中联动自动油门</summary><label><input id="tilt-throttle-enable" type="checkbox" checked={!!snap?.autoThrottleWanted} disabled={!(fresh&&attitude&&(snap?.autoThrottleWanted||(ready&&world&&!opBusy&&!outputActive&&!snap?.autoFanWanted&&tele?.control?.tilt_throttle)))} onChange={()=>invoke('自动油门许可已更新。','toggleTiltThrottle')}/> 允许倾斜自动油门</label><div className="real-input-grid">{throttleFields.map(([id,label,value])=><label key={id}>{label}<input id={id} type="number" defaultValue={value} step="0.1" disabled={opBusy||outputActive}/></label>)}</div><p className="field-note">设备回传：倾斜 {fresh?format(tele?.control?.tilt_throttle?.tilt_deg,1):'—'}° · 目标 {fresh?format(tele?.control?.tilt_throttle?.target_pct,1):'—'}% · 输出 {fresh?format(tele?.control?.tilt_throttle?.output_pct,1):'—'}%</p><button className="button secondary compact" disabled={!(armed||arming||snap?.autoThrottleWanted)} onClick={()=>invoke('电机已停止。','stopMotor')}>只停止电机</button><p className="field-note">允许后还需手动开始姿态回中；自动油门与独立调速互斥。</p></details>
-   <details><summary>PID 与云台映射</summary><p className="field-note">当前控制律：{!fresh?'等待遥测':tele?.control?.model_enabled===true?'模型换算（PID 项单位 °/s²）':tele?.control?.model_enabled===false?'角度 PID（PID 项单位 °）':'旧固件未报告'}。模型矩阵由固件配置，实物启用需要实测标定；模型模式的方向由矩阵决定。</p><table className="real-pid"><thead><tr><th>轴</th>{['P','I','D','输出'].map(label=><th key={label}>{label} / {fresh&&tele?.control?.model_enabled===true?'°/s²':'°'}</th>)}</tr></thead><tbody>{(['x','y'] as const).map(axis=><tr key={axis}><td>{axis.toUpperCase()}</td>{(['p_deg','i_deg','d_deg','output_deg'] as const).map(term=><td key={term}>{fresh?format(tele?.control?.pid?.[axis]?.[term]):'—'}</td>)}</tr>)}</tbody></table><form id="pid-form" onSubmit={e=>{e.preventDefault();void applyPid();}}><div className="real-input-grid">{pidFields.map(([id,label])=><label key={id}>{label}<input id={id} type="number" step="0.01" value={pidValues[id]??0} onChange={e=>{setPidDirty(true);setPidValues(v=>({...v,[id]:Number(e.target.value)}));}}/></label>)}{(['x','y'] as const).map(axis=><label key={axis}>{axis.toUpperCase()} 修正方向<select id={'sign-'+axis} disabled={fresh&&tele?.control?.model_enabled===true} value={pidValues['sign-'+axis]??1} onChange={e=>{setPidDirty(true);setPidValues(v=>({...v,['sign-'+axis]:Number(e.target.value)}));}}><option value={1}>+1</option><option value={-1}>−1</option></select></label>)}</div><button className="button secondary compact" type="submit" disabled={!(fresh&&!outputActive&&!tele?.calibrating&&!opBusy&&tele?.control?.pid)}>应用 PID 与映射</button><p className="field-note">设备输出停止后应用；以设备回传确认结果，重启后恢复固件默认。</p></form></details>
+   {showServoCalibration&&<ServoCalibrationPanel key={tele?.boot??'offline'} calibration={servoCalibration}
+    canSave={!!fresh&&!opBusy&&!outputActive&&!cg?.enabled&&!tele?.calibrating}
+    previewPwm={canCaptureServo?servoPwm:undefined}
+    onSave={async settings=>{
+     if(!engine.current)throw Error('控制代码尚未加载');
+     await engine.current.saveServoCalibration(settings);
+     setPidDirty(false);
+    }}/>}
+   <details><summary>姿态回中联动自动油门</summary><label><input id="tilt-throttle-enable" type="checkbox" checked={!!snap?.autoThrottleWanted} disabled={!(fresh&&attitude&&(snap?.autoThrottleWanted||(ready&&world&&!opBusy&&!outputActive&&!snap?.autoFanWanted&&tele?.control?.tilt_throttle)))} onChange={()=>invoke('自动油门许可已更新。','toggleTiltThrottle')}/> 允许倾斜自动油门</label><div className="real-input-grid">{throttleFields.map(([id,label,value])=><label key={id}>{label}<input id={id} type="number" defaultValue={value} step="0.01" disabled={opBusy||outputActive}/></label>)}</div><p className="field-note">设备回传：倾斜 {fresh?format(tele?.control?.tilt_throttle?.tilt_deg,1):'—'}° · 横向角速度 {fresh?format(tele?.control?.tilt_throttle?.rate_dps,1):'—'}°/s · 目标 {fresh?format(tele?.control?.tilt_throttle?.target_pct,1):'—'}% · 输出 {fresh?format(tele?.control?.tilt_throttle?.output_pct,1):'—'}%</p><button className="button secondary compact" disabled={!(armed||arming||snap?.autoThrottleWanted)} onClick={()=>invoke('电机已停止。','stopMotor')}>只停止电机</button><p className="field-note">勾选后点击「开始回中 + 自动油门」。静止且在倾斜死区内时只输出基础油门，基础油门为 0% 时电机保持停止。起转需要的最低油门由电调和电机决定。</p></details>
+   <details><summary>PID 与云台映射</summary><p className="field-note">当前控制律：{!fresh?'等待遥测':tele?.control?.model_enabled===true?'模型换算（PID 项单位 °/s²）':tele?.control?.model_enabled===false?'角度 PID（PID 项单位 °）':'旧固件未报告'}。模型矩阵由固件配置，实物启用需要实测标定；模型模式的方向由矩阵决定。</p><table className="real-pid"><thead><tr><th>轴</th>{['P','I','D','输出'].map(label=><th key={label}>{label} / {fresh&&tele?.control?.model_enabled===true?'°/s²':'°'}</th>)}</tr></thead><tbody>{(['x','y'] as const).map(axis=><tr key={axis}><td>{axis.toUpperCase()}</td>{(['p_deg','i_deg','d_deg','output_deg'] as const).map(term=><td key={term}>{fresh?format(tele?.control?.pid?.[axis]?.[term]):'—'}</td>)}</tr>)}</tbody></table><form id="pid-form" onSubmit={e=>{e.preventDefault();void applyPid();}}><div className="real-input-grid">{pidFields.filter(([id])=>id!=='azimuth-zero'||!servoCalibration).map(([id,label])=><label key={id}>{label}<input id={id} type="number" step="0.01" value={pidValues[id]??0} onChange={e=>{setPidDirty(true);setPidValues(v=>({...v,[id]:Number(e.target.value)}));}}/></label>)}{(['x','y'] as const).map(axis=><label key={axis}>{axis.toUpperCase()} 修正方向<select id={'sign-'+axis} disabled={fresh&&tele?.control?.model_enabled===true} value={pidValues['sign-'+axis]??1} onChange={e=>{setPidDirty(true);setPidValues(v=>({...v,['sign-'+axis]:Number(e.target.value)}));}}><option value={1}>+1</option><option value={-1}>−1</option></select></label>)}</div><button className="button secondary compact" type="submit" disabled={!(fresh&&!outputActive&&!tele?.calibrating&&!opBusy&&tele?.control?.pid)}>应用 PID 与映射</button><p className="field-note">设备输出停止后应用。X/Y 修正方向用于机体纠偏，舵机转向在「方向标定」中设置。PID 参数在重启后恢复默认。</p></form></details>
   </section>
   <section className="panel real-records"><div className="real-heading"><div><h2>真实数据记录</h2><p>JSONL 保留完整原始遥测；CSV 导出常用字段。</p></div></div>{records.length?<div className="real-record-list">{records.map(r=><div key={r.id}><span><b>{r.id}</b><small>{r.transport.toUpperCase()} · {r.count} 帧 · {r.status==='recording'?'采集中':r.status==='stopped'?'已结束':r.status==='disconnected'?'连接中断':r.status}</small></span><div><a href={`/api/real/records/${encodeURIComponent(r.id)}/jsonl`}><Download size={13}/> JSONL</a><a href={`/api/real/records/${encodeURIComponent(r.id)}/csv`}><Download size={13}/> CSV</a></div></div>)}</div>:<p className="field-note">尚无真实采集记录。</p>}</section>
  </div>;

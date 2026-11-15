@@ -606,7 +606,7 @@
     "component": "03-重力模块舵机-5/04-齿轮.step-1",
     "model_id": 41,
     "source_path": "C:\\Users\\huang\\AppData\\Local\\Temp\\swx20076\\IC~~\\04-齿轮.step.SLDPRT",
-    "link": "rocket_body",
+    "link": "balance_carriage",
     "mass_kg": 0.006266963251371878,
     "mass_basis": "PETG nominal density; CAD solid volume",
     "raw_mesh": "part_041.stl"
@@ -615,7 +615,7 @@
     "component": "03-重力模块舵机-5/01-单轴舵机-1",
     "model_id": 28,
     "source_path": "C:\\Projects\\机械部分\\01-单轴舵机.SLDPRT",
-    "link": "rocket_body",
+    "link": "balance_carriage",
     "mass_kg": 0.03244156815653546,
     "mass_basis": "CAD default; hardware mass unverified",
     "raw_mesh": "part_028.stl"
@@ -624,7 +624,7 @@
     "component": "03-重力模块舵机-5/01-金属主舵盘-1",
     "model_id": 38,
     "source_path": "C:\\Projects\\机械部分\\01-金属主舵盘.SLDPRT",
-    "link": "rocket_body",
+    "link": "balance_carriage",
     "mass_kg": 0.0007505256302867342,
     "mass_basis": "CAD default; hardware mass unverified",
     "raw_mesh": "part_038.stl"
@@ -705,7 +705,7 @@
     "component": "04-舵机齿轮连接-2",
     "model_id": 45,
     "source_path": "C:\\Projects\\机械部分\\04-舵机齿轮连接.SLDPRT",
-    "link": "rocket_body",
+    "link": "balance_carriage",
     "mass_kg": 0.030612397566995825,
     "mass_basis": "PETG nominal density; CAD solid volume",
     "raw_mesh": "part_045.stl"
