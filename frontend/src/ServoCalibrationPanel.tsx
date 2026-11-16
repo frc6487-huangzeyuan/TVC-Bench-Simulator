@@ -7,16 +7,21 @@ export type ServoCalibration = {
  elevation_reversed:boolean;
 };
 
-export default function ServoCalibrationPanel({calibration,canSave,previewPwm,onSave}:{
+export default function ServoCalibrationPanel({calibration,canSave,previewPwm,recordedZero,onSave}:{
  calibration?:ServoCalibration;
  canSave:boolean;
  previewPwm?:number[];
+ recordedZero?:boolean[];
  onSave:(settings:ServoCalibration)=>Promise<void>;
 }){
  const [draft,setDraft]=useState(calibration);
  const [saving,setSaving]=useState(false);
  const [message,setMessage]=useState('');
  const values=draft??calibration??{azimuth_deg:186.8,elevation_deg:175,azimuth_reversed:false,elevation_reversed:true};
+ // 快速标定保存精确 PWM；方向修改要沿用设备当前回传的原始角度。
+ const settings={...values,
+  azimuth_deg:recordedZero?.[0]?calibration!.azimuth_deg:values.azimuth_deg,
+  elevation_deg:recordedZero?.[1]?calibration!.elevation_deg:values.elevation_deg};
  const update=<K extends keyof ServoCalibration>(key:K,value:ServoCalibration[K])=>{
   setDraft({...values,[key]:value});
   setMessage('');
@@ -25,7 +30,7 @@ export default function ServoCalibrationPanel({calibration,canSave,previewPwm,on
   setSaving(true);
   setMessage('');
   try{
-   await onSave(values);
+   await onSave(settings);
    setDraft(undefined);
    setMessage('设备已确认保存，重启后保留。');
   }catch(error){
@@ -46,8 +51,8 @@ export default function ServoCalibrationPanel({calibration,canSave,previewPwm,on
     const direction=axis==='azimuth'?'azimuth_reversed':'elevation_reversed';
     return <fieldset key={axis} disabled={saving||!calibration}>
      <legend>{label}</legend>
-     <label>初始位置 / °<input type="number" required min={min} max={max} step={axis==='azimuth'?0.1:1} value={Number.isNaN(values[angle])?'':values[angle]} onChange={e=>update(angle,e.currentTarget.valueAsNumber)}/></label>
-     <button type="button" className="button secondary compact" disabled={!previewPwm} onClick={()=>capture(axis,channel,axis==='azimuth'?360:270)}>取{label.slice(0,2)}当前输出</button>
+     <label>初始位置 / °<input type="number" required min={min} max={max} step={axis==='azimuth'?0.1:1} value={Number.isNaN(settings[angle])?'':settings[angle]} disabled={recordedZero?.[channel]} onChange={e=>update(angle,e.currentTarget.valueAsNumber)}/></label>
+     <button type="button" className="button secondary compact" disabled={!previewPwm||recordedZero?.[channel]} onClick={()=>capture(axis,channel,axis==='azimuth'?360:270)}>取{label.slice(0,2)}当前输出</button>
      <label>方向<select value={values[direction]?'reverse':'normal'} onChange={e=>update(direction,e.target.value==='reverse')}><option value="normal">正向</option><option value="reverse">反向</option></select></label>
     </fieldset>;
    })}

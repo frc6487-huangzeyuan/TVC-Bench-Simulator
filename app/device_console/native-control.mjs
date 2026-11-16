@@ -19,7 +19,7 @@ const outputsActive=()=>!!(S.tele&&(S.tele.outputs.servo_enabled||S.tele.outputs
 
 export const responseNoticeType=error=>error?.code==='RESPONSE_TIMEOUT'?'warning':'error';
 function notice(message,type=''){window.dispatchEvent(new CustomEvent('tvc-native-notice',{detail:{message,type}}));}
-function describeReason(reason){if(reason==='FAULT_REQUIRES_RESTART')return `重新校准被当前故障拒绝；原始 fault：${S.tele?.fault||'未知，请查看原始故障码区域'}`;return ({ELEVATION_LIMIT:'俯仰命令超出设备当前限位，请检查固件版本',THROTTLE_NOT_READY:'自动油门尚未就绪',AUTO_THROTTLE_ACTIVE:'自动油门正在接管电机',THROTTLE_CONFIG:'自动油门参数无效',IMU_NOT_FOUND:'目标 IMU 未检测到，已保留原数据源',INVALID_IMU_SOURCE:'IMU 数据源编号无效',CONTROLLER_BUSY:'已有另一个控制页面连接，请先断开它',AUTH_REQUIRED:'无线认证失败',SESSION_MISMATCH:'连接会话已失效',STALE_COMMAND:'设备数据过期，请重新连接',MODE_LOCKED:'当前不在对应控制模式',NOT_READY:'设备尚未准备好',USE_SERVO_CALIBRATION:'方位零位请在方向标定中调整',SERVO_CALIBRATION_RANGE:'舵机标定参数超出范围',SERVO_CALIBRATION_SAVE:'设备保存舵机标定失败',CALIBRATION_STORAGE:'设备无法保存或恢复 IMU 校准',STOP_OUTPUTS_FIRST:'请先停止全部输出',WORLD_NOT_READY:'世界坐标系尚未建立',CONFIG_MISMATCH:'电调配置已变化，请重试',OLD_EPOCH:'控制状态已变化，请重试'})[reason]||reason;}
+function describeReason(reason){if(reason==='FAULT_REQUIRES_RESTART')return `重新校准被当前故障拒绝；原始 fault：${S.tele?.fault||'未知，请查看原始故障码区域'}`;return ({ELEVATION_LIMIT:'俯仰命令超出设备当前限位，请检查固件版本',THROTTLE_NOT_READY:'自动油门尚未就绪',AUTO_THROTTLE_ACTIVE:'自动油门正在接管电机',THROTTLE_CONFIG:'自动油门参数无效',IMU_NOT_FOUND:'目标 IMU 未检测到，已保留原数据源',INVALID_IMU_SOURCE:'IMU 数据源编号无效',CONTROLLER_BUSY:'已有另一个控制页面连接，请先断开它',AUTH_REQUIRED:'无线认证失败',SESSION_MISMATCH:'连接会话已失效',STALE_COMMAND:'设备数据过期，请重新连接',MODE_LOCKED:'当前不在对应控制模式',NOT_READY:'设备尚未准备好',USE_SERVO_CALIBRATION:'方位零位请在方向标定中调整',SERVO_CALIBRATION_RANGE:'舵机标定参数超出范围',SERVO_CALIBRATION_SAVE:'设备保存舵机标定失败',SERVO_TRAVEL_MOVING:'请等待当前步进完成',SERVO_TRAVEL_ENDPOINTS:'请从零位分别移动到两个端点',SERVO_TRAVEL_ACTIVE:'请先结束行程标定',SERVO_TRAVEL_ZERO_LOCKED:'请用快速标定重新记录该轴零位',CALIBRATION_STORAGE:'设备无法保存或恢复 IMU 校准',STOP_OUTPUTS_FIRST:'请先停止全部输出',WORLD_NOT_READY:'世界坐标系尚未建立',CONFIG_MISMATCH:'电调配置已变化，请重试',OLD_EPOCH:'控制状态已变化，请重试'})[reason]||reason;}
 
 function acceptPacket(p){
   if(!p||p.v!==VERSION||p.session!==S.session)return;
@@ -547,6 +547,32 @@ export async function saveServoCalibration(settings){
     const ack=await command('servo_calibrate',settings,2500,t);
     await waitTelemetry(p=>p.epoch>=ack.epoch&&p.config_rev>=ack.config_rev&&
       Object.entries(settings).every(([key,value])=>key==='azimuth_deg'?Math.abs(p.control?.servo_calibration?.[key]-value)<0.051:p.control?.servo_calibration?.[key]===value),2500,t);
+  });
+}
+export async function startServoTravel(axis){
+  await operation('servo-travel',async t=>{
+    if(!fresh()||!S.tele.control?.servo_travel)throw Error('需要支持行程标定的固件');
+    if(outputsActive()||S.tele.calibrating)throw Error('请先停止全部输出');
+    S.heartbeat=true;
+    await command('heartbeat',{},1800,t);
+    const ack=await command('servo_travel_start',{axis},1800,t);
+    await waitTelemetry(p=>p.epoch>=ack.epoch&&p.control?.servo_travel?.axis===axis,2000,t);
+  });
+}
+export async function updateServoTravel(action,delta){
+  await operation('servo-travel',async t=>{
+    const travel=S.tele?.control?.servo_travel;
+    if(!fresh()||!travel||travel.axis<0)throw Error('请先开始行程标定');
+    const ack=await command('servo_travel_'+action,action==='step'?{delta_us:delta}:{},2500,t);
+    await waitTelemetry(p=>{
+      const next=p.control?.servo_travel;
+      if(!next||p.epoch<ack.epoch)return false;
+      if(action==='save')return next.axis===-1&&!p.outputs.servo_enabled&&p.config_rev>=ack.config_rev&&
+        [travel.min_us,travel.zero_us,travel.max_us].every((value,i)=>next.saved_us?.[travel.axis]?.[i]===value);
+      return next.axis===travel.axis&&next.current_us===next.target_us&&
+        (action!=='zero'||next.zero_us===next.current_us);
+    },2500,t);
+    if(action==='save')S.heartbeat=false;
   });
 }
 export async function centerServo(){

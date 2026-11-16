@@ -4,6 +4,8 @@
 
 ## Studio 使用流程
 
+真实云台标定入口为「真实飞控 → 零位与行程标定」，需要飞控 2.5.2 或更新版本。选择方位或俯仰，使用小步按钮移到机械零位并记录，再移到两侧可用端点并保存。界面显示飞控记录的最小、零位和最大输出脉宽。
+
 1. 使用 `git submodule update --init --recursive` 初始化飞控子模块。打开“飞控工程”，选择 `firmware/TVC_Electronics` 并点击“读取工程”。已有工作区保留之前选择的工程路径；未初始化子模块时兼容原本机路径 `C:\Projects\代码\TVC_Electronics`。
 
 2. 查看实际源码，点击“编译接入”。当前 TVC 适配器直接编译并调用 `Attitude.h`、`HistoryAttitude.h`、`GimbalControl.h` 等原工程代码，原文件不被修改。
