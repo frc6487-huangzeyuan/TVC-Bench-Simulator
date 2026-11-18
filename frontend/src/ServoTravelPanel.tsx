@@ -8,24 +8,33 @@ export type ServoTravel = {
  zero_us:number;
  max_us:number;
  saved_us:[number[],number[]];
+ effective_us?:[number[],number[]];
+ capture_endpoints?:boolean;
+ explicit_endpoints?:boolean;
 };
 
-type TravelAction='step'|'zero'|'save';
+type TravelAction='step'|'zero'|'min'|'max'|'save';
 const axes=['方位轴','俯仰轴'];
+const directions=[-1,1] as const;
+const directionLabel=(direction:number)=>direction<0?'反向':'正向';
 
-export default function ServoTravelPanel({travel,canStart,busy,start,update,stop}:{
+export default function ServoTravelPanel({travel,reversed,canStart,canMove,busy,start,update,stop}:{
  travel?:ServoTravel;
+ reversed:[boolean,boolean];
  canStart:boolean;
+ canMove:boolean;
  busy:boolean;
  start:(axis:number)=>Promise<void>;
- update:(action:TravelAction,delta?:number)=>Promise<void>;
+ update:(axis:number,action:TravelAction,delta?:number)=>Promise<void>;
  stop:()=>Promise<void>;
 }){
  const [message,setMessage]=useState('');
- const press=useRef<symbol|null>(null);
+ const press=useRef<{axis:number;direction:number}|null>(null);
  const pending=useRef(false);
  const endMove=()=>{press.current=null;};
  useEffect(()=>endMove,[]);
+ useEffect(()=>{if(!canMove)endMove();},[canMove]);
+
  const run=async(action:()=>Promise<void>,success='')=>{
   if(pending.current)return false;
   pending.current=true;
@@ -34,48 +43,81 @@ export default function ServoTravelPanel({travel,canStart,busy,start,update,stop
   catch(error){setMessage(error instanceof Error?error.message:String(error));return false;}
   finally{pending.current=false;}
  };
- const hold=async(event:PointerEvent<HTMLButtonElement>,delta:number)=>{
-  if(event.button!==0||press.current||pending.current)return;
-  const id=Symbol();
+ const stepDelta=(axis:number,direction:number)=>direction*(reversed[axis]?-5:5);
+ const startMove=async(axis:number,direction:number)=>{
+  if(travel?.axis===-1)await start(axis);
+  await update(axis,'step',stepDelta(axis,direction));
+ };
+ const hold=async(event:PointerEvent<HTMLButtonElement>,axis:number,direction:number)=>{
+  if(!event.isPrimary||event.button!==0||press.current||pending.current)return;
   event.currentTarget.setPointerCapture(event.pointerId);
-  press.current=id;
+  const held={axis,direction};
+  press.current=held;
+  let moved=await run(()=>startMove(axis,direction));
   let delay=280;
-  while(press.current===id&&await run(()=>update('step',delta))){
+  while(moved&&press.current===held){
    await new Promise(resolve=>setTimeout(resolve,delay));
+   if(press.current!==held)break;
+   moved=await run(()=>update(axis,'step',stepDelta(axis,direction)));
    delay=90;
   }
+  if(press.current===held)endMove();
  };
- const active=!!travel&&travel.axis>=0;
+
+ const active=travel?.axis??-1;
  const settled=!!travel&&travel.current_us===travel.target_us;
  const rangeReady=!!travel&&travel.min_us<travel.zero_us&&travel.zero_us<travel.max_us;
  return <section aria-labelledby="servo-travel-title">
-  <h3 id="servo-travel-title">零位与行程快速标定</h3>
-  {!travel?<p className="field-note">更新至飞控 2.5.2 后，可用按钮移动单轴并记录零位和行程。</p>:<>
-   <p className="field-note">观察实物，用按钮移到机械零位并确认，再分别移动到两侧可用端点。设备记录的是输出脉宽（µs）。</p>
-   {active?<>
-    <p>{axes[travel.axis]} · 当前 {travel.current_us} µs{settled?'':` → ${travel.target_us} µs`}</p>
-    <div className="real-actions servo-travel-jog">
-     {[-20,-5,5,20].map(delta=><button key={delta} type="button" className="button secondary compact"
-      aria-label={`移动 ${delta>0?'+':''}${delta} 微秒`}
-      onPointerDown={event=>void hold(event,delta)} onPointerUp={endMove} onPointerCancel={endMove}
-      onLostPointerCapture={endMove} onBlur={endMove}
-      onClick={event=>{if(event.detail===0)void run(()=>update('step',delta));}}>{delta>0?'+':''}{delta} µs</button>)}
-    </div>
-    <p className="field-note">{travel.zero_us?`已记录 ${travel.min_us} / ${travel.zero_us} / ${travel.max_us} µs（最小 / 零位 / 最大）`:'请先移到机械零位。移动按钮可点按或按住。'}</p>
+  <h3 id="servo-travel-title">实物轴程标定</h3>
+  {!travel?<p className="field-note">连接支持行程标定的飞控后可移动两轴。飞控 2.5.3 起支持逐端确认。</p>:<>
+   <p className="field-note">点按移动 5 µs，按住连续移动，松开停止点动。先观察实物并记录零位，再移动到两侧可用端点。一次标定一个轴。</p>
+   <div className="servo-travel-axes">{axes.map((label,axis)=>{
+    const saved=travel.saved_us[axis];
+    const effective=travel.effective_us?.[axis];
+    return <div className="servo-travel-axis" key={label}>
+     <h4>{label}</h4>
+     <div className="real-actions servo-travel-jog">{directions.map(direction=>{
+      const held=press.current?.axis===axis&&press.current.direction===direction;
+      const enabled=active===axis?canMove:active===-1&&canStart;
+      return <button key={direction} type="button" className="button secondary compact"
+       aria-label={label+directionLabel(direction)} disabled={!held&&(!enabled||busy)}
+       onPointerDown={event=>void hold(event,axis,direction)} onPointerUp={endMove}
+       onPointerCancel={endMove} onLostPointerCapture={endMove} onBlur={endMove}
+       onClick={event=>{if(event.detail===0)void run(()=>startMove(axis,direction));}}>
+       {directionLabel(direction)}
+      </button>;
+     })}</div>
+     <p className="field-note">{saved?.[1]?'已保存 '+saved.join(' / ')+' µs':'尚未记录端点'}</p>
+     {effective&&<p className="field-note">生效范围 {effective[0]}–{effective[2]} µs</p>}
+    </div>;
+   })}</div>
+   {active>=0&&<>
+    <p>{axes[active]} · 当前 {travel.current_us} µs{settled?'':' → '+travel.target_us+' µs'}</p>
+    <p className="field-note">{travel.zero_us?
+     '已记录 '+(travel.min_us<travel.zero_us?travel.min_us:'—')+' / '+travel.zero_us+' / '+(travel.max_us>travel.zero_us?travel.max_us:'—')+' µs（低端 / 零位 / 高端）'
+     :'请先把轴移到机械零位。'}</p>
+    {travel.zero_us&&!travel.explicit_endpoints&&<p className="field-note">当前固件记录本次点动经过的最小和最大脉宽。</p>}
     <div className="real-actions">
-     <button type="button" className="button secondary compact" disabled={busy||!settled} onClick={()=>void run(()=>update('zero'))}>
+     <button type="button" className="button secondary compact" disabled={!canMove||busy||!settled} onClick={()=>void run(()=>update(active,'zero'))}>
       {travel.zero_us?'重新记录零位':'记录当前为零位'}
      </button>
-     <button type="button" className="button primary compact" disabled={busy||!settled||!rangeReady} onClick={()=>void run(()=>update('save'),'零位和两端行程已保存到飞控。')}>
+     {travel.explicit_endpoints&&directions.map(direction=>{
+      const high=stepDelta(active,direction)>0;
+      const onSide=high?travel.current_us>travel.zero_us:travel.current_us<travel.zero_us;
+      return <button key={direction} type="button" className="button secondary compact"
+       disabled={!canMove||busy||!settled||!travel.zero_us||!onSide}
+       onClick={()=>void run(()=>update(active,high?'max':'min'),'已记录'+directionLabel(direction)+'端点。')}>
+       记录{directionLabel(direction)}端点
+      </button>;
+     })}
+     <button type="button" className="button primary compact" disabled={!canMove||busy||!settled||!rangeReady}
+      onClick={()=>void run(()=>update(active,'save'),'零位和两个端点已写入飞控，重启后会自动应用。')}>
       保存零位和行程
      </button>
      <button type="button" className="button secondary compact" onClick={()=>{endMove();void stop().then(()=>setMessage('已取消标定。')).catch(error=>setMessage(String(error)));}}>取消标定</button>
     </div>
-   </>:<>
-    <div className="real-actions">{axes.map((label,i)=><button key={label} type="button" className="button secondary compact"
-     disabled={!canStart||busy} onClick={()=>void run(()=>start(i))}>标定{label}</button>)}</div>
-    <p className="field-note">{axes.map((label,i)=>`${label} ${travel.saved_us[i]?.[1]?travel.saved_us[i].join(' / ')+' µs':'使用默认行程'}`).join(' · ')}</p>
    </>}
+   <p className="field-note">飞控会长期保存每个轴的标定。只有成功保存新的三点才会替换该轴记录，手动、自动和回位都使用生效范围。</p>
    <p className="field-note" role="status">{message}</p>
   </>}
  </section>;

@@ -181,9 +181,10 @@ export default function RealDevice({backendConnected,onActivityChange}:{backendC
     <div className="real-actions"><button className="button primary compact" disabled={!!snap?.autoThrottleWanted||!!tele?.control?.tilt_throttle?.enabled||!(ready&&attitude&&world&&tele?.control?.auto_motor_allowed&&snap?.autoFanWanted&&!armed&&!arming&&!opBusy)} onClick={()=>invoke('风扇已启用。','startAutoMotor')}>启动风扇</button><button className="button secondary compact" disabled={!(attitude&&(armed||arming||snap?.operation==='auto-motor'))} onClick={()=>invoke('风扇已停止。','stopMotor')}>停止风扇</button></div>
    </div></div>
    {(showServoCalibration||travelActive)&&<div className="servo-travel" id="axis-calibration" key={tele?.boot??'offline'}>
-    <ServoTravelPanel travel={servoTravel} canStart={ready&&!opBusy&&!outputActive&&!cg?.enabled} busy={commandBusy}
+    <ServoTravelPanel travel={servoTravel} canStart={ready&&!opBusy&&!outputActive&&!cg?.enabled} canMove={ready} busy={commandBusy}
+     reversed={[!!servoCalibration?.azimuth_reversed,!!servoCalibration?.elevation_reversed]}
      start={async axis=>{await engine.current!.startServoTravel(axis);}}
-     update={async(action,delta)=>{await engine.current!.updateServoTravel(action,delta);}}
+     update={async(axis,action,delta)=>{await engine.current!.updateServoTravel(axis,action,delta);}}
      stop={async()=>{await engine.current!.stopAll();}}/>
     {!travelActive&&<details><summary>舵机方向和原始零位</summary>
      <ServoCalibrationPanel calibration={servoCalibration}

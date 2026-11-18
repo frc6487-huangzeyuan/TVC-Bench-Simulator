@@ -12,3 +12,8 @@
 .servo-calibration legend,.servo-calibration label{color:#c0ced7;font-size:12px}
 .servo-calibration label{display:block;margin:6px 0 10px}
 @media(max-width:520px){.servo-calibration>.real-input-grid{grid-template-columns:1fr}}
+
+.servo-travel-axes{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
+.servo-travel-axis{padding:10px;border:1px solid var(--line);border-radius:6px}
+.servo-travel-axis h4{font-size:12px;margin:0 0 6px}
+.servo-travel-axis .field-note{margin-bottom:0}

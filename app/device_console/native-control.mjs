@@ -555,22 +555,27 @@ export async function startServoTravel(axis){
     if(outputsActive()||S.tele.calibrating)throw Error('请先停止全部输出');
     S.heartbeat=true;
     await command('heartbeat',{},1800,t);
-    const ack=await command('servo_travel_start',{axis},1800,t);
+    const explicit=!!S.tele.control.servo_travel.capture_endpoints;
+    const ack=await command('servo_travel_start',{axis,explicit_endpoints:explicit},1800,t);
     await waitTelemetry(p=>p.epoch>=ack.epoch&&p.control?.servo_travel?.axis===axis,2000,t);
   });
 }
-export async function updateServoTravel(action,delta){
+export async function updateServoTravel(axis,action,delta){
   await operation('servo-travel',async t=>{
     const travel=S.tele?.control?.servo_travel;
-    if(!fresh()||!travel||travel.axis<0)throw Error('请先开始行程标定');
-    const ack=await command('servo_travel_'+action,action==='step'?{delta_us:delta}:{},2500,t);
+    if(!fresh()||!travel||travel.axis!==axis)throw Error('当前轴的标定已结束，请重新开始');
+    const capture=action==='min'||action==='max';
+    const cmd=capture?'capture':action;
+    const fields=capture?{endpoint:action}:action==='step'?{delta_us:delta}:{};
+    const ack=await command('servo_travel_'+cmd,fields,2500,t);
     await waitTelemetry(p=>{
       const next=p.control?.servo_travel;
       if(!next||p.epoch<ack.epoch)return false;
       if(action==='save')return next.axis===-1&&!p.outputs.servo_enabled&&p.config_rev>=ack.config_rev&&
         [travel.min_us,travel.zero_us,travel.max_us].every((value,i)=>next.saved_us?.[travel.axis]?.[i]===value);
-      return next.axis===travel.axis&&next.current_us===next.target_us&&
-        (action!=='zero'||next.zero_us===next.current_us);
+      if(next.axis!==axis||next.current_us!==next.target_us)return false;
+      if(capture)return (action==='min'?next.min_us:next.max_us)===next.current_us;
+      return action!=='zero'||next.zero_us===next.current_us;
     },2500,t);
     if(action==='save')S.heartbeat=false;
   });
