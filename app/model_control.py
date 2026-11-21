@@ -9,7 +9,7 @@ from scipy.optimize import least_squares
 def model_compensation(cfg):
     # 控制增益、初始状态和噪声不改变该标定。物理参数变化后自动重新求解。
     excluded={'control_law','duration_s','initial_x_deg','initial_y_deg','initial_azimuth_deg',
-              'initial_elevation_deg','auto_prepare_servos','realtime','playback_speed','seed','use_truth',
+              'initial_elevation_deg','realtime','playback_speed','seed','use_truth',
               'kp_x','ki_x','kd_x','kp_y','ki_y','kd_y','gyro_noise_dps','accel_noise_g',
               'latency_ms','drop_pct','imu_height_mm','slew_us','target_x_deg','target_y_deg','torque_max_pct','torque_base_pct',
               'torque_deflection_limit_deg'}

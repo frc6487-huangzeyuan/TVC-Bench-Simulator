@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse,Response,JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .compiler import ROOT,DEFAULT_PROJECT,current_project,save_state,scan_project,read_source,build_project,build_is_current
-from .simulation import BALANCE,Experiment,SimulationManager,META,PLAYBACK_SPEEDS,parameter_preview
+from .simulation import BALANCE,Experiment,SimulationManager,META,PLAYBACK_SPEEDS,continuous_samples,device_model,parameter_preview
 from .tuning import TuningManager,TuningRequest,GAINS,ACTIVE
 from .real_recording import RealRecorder,export_csv
 from .real_transport import device_info,proxy_device,allowed_local_origin
@@ -17,13 +17,25 @@ tuner=None
 recorder=RealRecorder(ROOT/'real_runs')
 record_socket=None
 execution_lock=threading.RLock()
+REPORT_POINT_LIMIT=3000
+
+async def drain_simulation():
+    while True:
+        await asyncio.to_thread(manager.poll)
+        await asyncio.sleep(.1)
+
 @asynccontextmanager
 async def lifespan(app):
     global manager,tuner
     manager=SimulationManager();tuner=TuningManager()
-    yield
-    if recorder.status()['status']=='recording':recorder.stop('interrupted')
-    tuner.close();manager.close()
+    drain=asyncio.create_task(drain_simulation())
+    try:
+        yield
+    finally:
+        drain.cancel()
+        await asyncio.gather(drain,return_exceptions=True)
+        if recorder.status()['status']=='recording':recorder.stop('interrupted')
+        tuner.close();manager.close()
 app=FastAPI(title='TVC Studio',lifespan=lifespan)
 
 class ProjectRequest(BaseModel):path:str
@@ -80,7 +92,7 @@ def start(cfg:Experiment):
         if tuner.poll()['status'] in ACTIVE:raise HTTPException(400,'请先停止参数优化，再开始实验。')
         state=current_project()
         if not build_is_current(state.get('build')):raise HTTPException(400,'源码尚未编译，或编译后已有改动。请先编译接入当前工程。')
-        result=wrap_error(lambda:manager.start(cfg,state['build']))
+        result=wrap_error(lambda:manager.start(cfg,state['build'],continuous=True))
         (ROOT/'work/studio_settings.json').write_text(json.dumps(cfg.model_dump(),ensure_ascii=False,indent=2),encoding='utf-8')
         return result
 
@@ -119,6 +131,10 @@ def local_request(request:Request):
     origin=request.headers.get('origin')
     if origin and origin not in ('http://127.0.0.1:18767','http://localhost:18767'):
         raise HTTPException(403,'仅允许本地控制台访问。')
+
+@app.get('/api/real/model')
+def real_model():
+    return device_model()
 
 @app.get('/api/real/device')
 async def real_device(request:Request):
@@ -280,9 +296,16 @@ def runs():
 def run_detail(run_id:str):
     p=ROOT/'runs'/run_id
     if Path(run_id).name!=run_id or not (p/'summary.json').is_file():raise HTTPException(404,'未找到实验记录。')
-    return {'summary':json.loads((p/'summary.json').read_text(encoding='utf-8')),
-            'run':json.loads((p/'run.json').read_text(encoding='utf-8')),
-            'telemetry':json.loads((p/'telemetry.json').read_text(encoding='utf-8'))}
+    summary=json.loads((p/'summary.json').read_text(encoding='utf-8'))
+    run=json.loads((p/'run.json').read_text(encoding='utf-8'))
+    if run.get('continuous'):
+        count=summary['sample_count']
+        stride=max(1,(count-1+REPORT_POINT_LIMIT-2)//(REPORT_POINT_LIMIT-1))
+        telemetry=[sample for i,sample in enumerate(continuous_samples(p))
+                   if i%stride==0 or i==count-1]
+    else:
+        telemetry=json.loads((p/'telemetry.json').read_text(encoding='utf-8'))
+    return {'summary':summary,'run':run,'telemetry':telemetry}
 
 @app.get('/api/runs/{run_id}/csv')
 def csv_export(run_id:str):

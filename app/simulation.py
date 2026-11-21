@@ -1,4 +1,5 @@
 """MuJoCo 1000Hz 物理 + 原生 C++ 飞控。每个实验在独立进程中运行。"""
+from contextlib import ExitStack
 import csv,ctypes as ct,json,math,multiprocessing as mp,queue,time,traceback,uuid,threading,functools
 from collections import deque
 from pathlib import Path
@@ -41,12 +42,19 @@ class BodyOverride(BaseModel):
 
 class Experiment(BaseModel):
     model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
+
+    @model_validator(mode='before')
+    @classmethod
+    def ignore_removed_preposition(cls, values):
+        if isinstance(values,dict) and 'auto_prepare_servos' in values:
+            return {key:value for key,value in values.items() if key!='auto_prepare_servos'}
+        return values
+
     duration_s:float=Field(20,ge=1,le=180)
     initial_x_deg:float=Field(5,ge=-30,le=30)
     initial_y_deg:float=Field(0,ge=-30,le=30)
     initial_azimuth_deg:float=Field(180,ge=0,le=360)
     initial_elevation_deg:float=Field(135,ge=85,le=185)
-    auto_prepare_servos:bool=True
     control_law:Literal['pid','model','torque']='pid'
     target_x_deg:float=Field(0,ge=-20,le=20)
     target_y_deg:float=Field(0,ge=-20,le=20)
@@ -130,6 +138,7 @@ def load_native(dll,cfg,start_pwm=None):
     lib.sim_step.argtypes=[ct.POINTER(NativeInput),ct.POINTER(NativeOutput)];lib.sim_step.restype=ct.c_int
     throttle=cfg.torque_base_pct if cfg.control_law=='torque' else cfg.throttle_pct
     deflection=cfg.torque_deflection_limit_deg if cfg.control_law=='torque' else cfg.correction_limit_deg
+    # 模型几何在自身 X/Y 坐标中采用 +1/+1。实物测向结果只用于飞控。
     c=NativeConfig((cfg.kp_x,cfg.kp_y),(cfg.ki_x,cfg.ki_y),(cfg.kd_x,cfg.kd_y),
                    3,.03,deflection,(1,1),180,cfg.slew_us,50000,throttle,int(cfg.use_truth))
     lib.sim_reset(ct.byref(c))
@@ -274,74 +283,28 @@ class Playback:
         self.pending_ticks-=1
         return self.pending_ticks%STEP_TICKS==0
 
-def prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,controller=None,playback=None):
-    """固定台架、关闭推力，按真实舵机动力学与指令限速移动到准备位置。"""
-    sent=initial_pwm(cfg)
-    # 按原 PID 的初始比例项计算纠偏向量；I、D 在启动时尚无历史。
-    # 舵机正负俯仰等价，因此选离起始方位最近的解。
-    azimuth=cfg.initial_azimuth_deg
-    elevation=135.
-    vx=max(-cfg.correction_limit_deg,min(cfg.correction_limit_deg,-cfg.kp_x*cfg.initial_x_deg))
-    vy=max(-cfg.correction_limit_deg,min(cfg.correction_limit_deg,-cfg.kp_y*cfg.initial_y_deg))
-    magnitude=min(cfg.correction_limit_deg,math.hypot(vx,vy))
-    if build['adapter']=='tvc' and magnitude>=.15:
-        direction=math.degrees(math.atan2(vy,vx))+180
-        options=[direction+180*flip+360*turn for flip in range(2) for turn in range(-2,3)
-                 if 0<=direction+180*flip+360*turn<=360]
-        azimuth=min(options,key=lambda a:abs(a-cfg.initial_azimuth_deg))
-        elevation+=magnitude if math.cos(math.radians(azimuth-direction))>=0 else -magnitude
-    elif build['adapter']!='tvc':azimuth=180
-    goal=[math.floor(500+azimuth*2000/360+.5),math.floor(500+elevation*2000/270+.5)]
-    if build['adapter']=='tvc' and controller is not None and hasattr(controller,'sim_preposition'):
-        # 启动准备和运行共用 C++ 的纠偏向量、模型换算及逆运动学。
-        controller.sim_preposition.argtypes=[ct.c_double,ct.c_double,ct.c_double,ct.POINTER(ct.c_double)]
-        controller.sim_preposition.restype=ct.c_int
-        pwm=(ct.c_double*2)()
-        if controller.sim_preposition(cfg.initial_x_deg,cfg.initial_y_deg,cfg.initial_azimuth_deg,pwm):
-            raise RuntimeError('C++ 舵机预定位解算失败。')
-        goal=[int(pwm[0]),int(pwm[1])]
-    target=np.array([(goal[0]-1500)*math.pi/1000+trim,(goal[1]-1500)*math.radians(270)/2000])
-    held=data.qpos[:2].copy();limit_s=max(5.,max(abs(goal[i]-sent[i]) for i in range(2))/int(cfg.slew_us)*.01+5.)
-    playback=playback or Playback(cfg)
-    playback.rebase(data.time)
-    tick=0;goal_since=None;site=model.site('body_reference').id
-    def publish():
-        truth=lean(data.site_xmat[site].reshape(3,3))
-        outbox.put({'kind':'frame','run_id':run_id,'status':'paused' if playback.paused else 'starting',
-          'phase':'preposition','time':0.,'preparation_s':round(data.time,6),'playback_speed':playback.speed,
-          'message':'固定台架，舵机预定位中；推力为零','pose':poses(model,data),
-          'x':float(truth[0]),'y':float(truth[1]),'est_x':float(truth[0]),'est_y':float(truth[1]),
-          'tilt':math.degrees(math.acos(float(np.clip(data.site_xmat[site].reshape(3,3)[2,2],-1,1)))),
-          'pwm':sent.copy(),'servo_deg':servo_angles(data,trim),
-          'balance':balance_state(model,data,cfg.cg_initial_mm,balance_pwm(cfg.cg_initial_mm)),
-          'thrust':0.,'rpm':0.,'throttle':0.,'propeller_turns':0.,'pid':[0.]*6,'limited':True,'gyro':[0.]*3,'accel':[0.]*3,
-          'samples':0,'age_ms':0.,'rtf':0.})
-    publish()
-    while data.time<limit_s:
-        if not playback.ready(data.time,commands,publish):return None,{'status':'stopped','duration_s':data.time}
-        if tick%STEP_TICKS==0:
-            for i in range(2):sent[i]+=max(-int(cfg.slew_us),min(int(cfg.slew_us),goal[i]-sent[i]))
-        cmd_target=np.array([(sent[0]-1500)*math.pi/1000+trim,(sent[1]-1500)*math.radians(270)/2000])
-        speed=np.clip((cmd_target-data.qpos[2:4])/cfg.servo_tau_s,
-                      -math.radians(cfg.servo_speed_deg_s),math.radians(cfg.servo_speed_deg_s))
-        data.qfrc_applied[:]=0
-        data.qfrc_applied[2:4]=np.clip(.08*(speed-data.qvel[2:4]),-cfg.servo_torque_nm,cfg.servo_torque_nm)
-        mujoco.mj_step(model,data);tick+=1
-        # 模拟释放前的固定夹具；准备阶段没有施加任何推力或扰动。
-        data.qpos[:2]=held;data.qvel[:2]=0;mujoco.mj_forward(model,data)
-        if playback.advanced() or (not playback.paused and tick%20==0):publish()
-        # 指令抵达后仍要等待机械响应；小幅修正不能因位置容差而立即释放。
-        if sent==goal and goal_since is None:goal_since=data.time
-        if goal_since is not None and data.time-goal_since>=.25 and np.max(np.abs(data.qpos[2:4]-target))<math.radians(1) and np.max(np.abs(data.qvel[2:4]))<math.radians(2):
-            info={'status':'completed','duration_s':data.time,'initial_pwm':initial_pwm(cfg),
-                  'target_pwm':goal,'release_servo_deg':servo_angles(data,trim)}
-            data.time=0.;data.qfrc_applied[:]=0;mujoco.mj_forward(model,data)
-            return sent,info
-    raise RuntimeError('舵机预定位超时，尚未达到目标；实验未释放台架。')
-
 def poses(model,data):
     return [{'name':name,'position':data.xpos[model.body(name).id].tolist(),
              'quaternion':data.xquat[model.body(name).id].tolist()} for name in NAMES]
+
+def device_model():
+    """Upright bench geometry for telemetry-driven rendering, without physics steps."""
+    model,data,_=make_model(Experiment(initial_x_deg=0))
+    bodies=[]
+    for name in NAMES:
+        i=model.body(name).id
+        parent=model.body_parentid[i]
+        parent_rotation=data.xmat[parent].reshape(3,3)
+        local_rotation=parent_rotation.T@data.xmat[i].reshape(3,3)
+        joint=model.body_jntadr[i]
+        hinge=model.body_jntnum[i] and model.jnt_type[joint]==mujoco.mjtJoint.mjJNT_HINGE
+        quaternion=np.empty(4)
+        mujoco.mju_mat2Quat(quaternion,local_rotation.ravel())
+        bodies.append({'name':name,'parent':model.body(parent).name if parent else None,
+                       'position':(parent_rotation.T@(data.xpos[i]-data.xpos[parent])).tolist(),
+                       'quaternion':quaternion.tolist(),
+                       'axis':model.jnt_axis[joint].tolist() if hinge else None})
+    return bodies
 
 def servo_angles(data,trim):
     return [math.degrees(data.qpos[2]-trim)+180,math.degrees(data.qpos[3])+135]
@@ -374,44 +337,134 @@ def idle_packet():
             'balance':balance_state(m,d,0.,CG_PWM_HOME),
             'limited':False,'age_ms':0,'rtf':0,'samples':0,'gyro':[0,0,0],'accel':[0,0,1]}
 
+CSV_COLUMNS={
+    'pwm':['azimuth_pwm_us','elevation_pwm_us'],
+    'servo_deg':['azimuth_deg','elevation_deg'],
+    'pid':['p_x','i_x','d_x','p_y','i_y','d_y'],
+    'gyro':['gyro_x_dps','gyro_y_dps','gyro_z_dps'],
+    'accel':['accel_x_g','accel_y_g','accel_z_g'],
+    'motor_joint_torque_nm':['motor_outer_torque_nm','motor_inner_torque_nm'],
+    'thrust_origin':['thrust_origin_x_m','thrust_origin_y_m','thrust_origin_z_m'],
+    'thrust_direction':['thrust_dir_x','thrust_dir_y','thrust_dir_z'],
+}
+
+
+def csv_row(packet):
+    row={}
+    for key,value in packet.items():
+        if key in CSV_COLUMNS:
+            row.update(zip(CSV_COLUMNS[key],value))
+        elif key=='balance':
+            for name in ('position_mm','target_mm','pwm_us','cg_shift_mm','mass_kg'):
+                row['balance_'+name]=value[name]
+        elif key!='pose':
+            row[key]=value
+    return row
+
+
 def write_csv(folder,history):
-    columns={'pwm':['azimuth_pwm_us','elevation_pwm_us'],
-             'servo_deg':['azimuth_deg','elevation_deg'],
-             'pid':['p_x','i_x','d_x','p_y','i_y','d_y'],
-             'gyro':['gyro_x_dps','gyro_y_dps','gyro_z_dps'],
-             'accel':['accel_x_g','accel_y_g','accel_z_g'],
-             'motor_joint_torque_nm':['motor_outer_torque_nm','motor_inner_torque_nm'],
-             'thrust_origin':['thrust_origin_x_m','thrust_origin_y_m','thrust_origin_z_m'],
-             'thrust_direction':['thrust_dir_x','thrust_dir_y','thrust_dir_z']}
-    rows=[]
-    for p in history:
-        row={}
-        for k,v in p.items():
-            if k in columns:row.update(zip(columns[k],v))
-            elif k=='balance':
-                for name in ('position_mm','target_mm','pwm_us','cg_shift_mm','mass_kg'):row['balance_'+name]=v[name]
-            elif k!='pose':row[k]=v
-        rows.append(row)
-    with (folder/'telemetry.csv').open('w',encoding='utf-8-sig',newline='') as f:
-        fields=list(rows[0]) if rows else ['time']
-        writer=csv.DictWriter(f,fieldnames=fields);writer.writeheader();writer.writerows(rows)
+    rows=map(csv_row,history)
+    first=next(rows, None)
+    with (folder/'telemetry.csv').open('w',encoding='utf-8-sig',newline='') as file:
+        writer=csv.DictWriter(file,fieldnames=list(first) if first else ['time'])
+        writer.writeheader()
+        if first:
+            writer.writerow(first)
+            writer.writerows(rows)
 
-class PreparationStopped(Exception):pass
 
-def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_disturbances=None,capture_pose=False):
+class RunMetrics:
+    """逐帧统计，持续运行无需在内存中保留完整轨迹。"""
+    def __init__(self, torque):
+        self.torque=torque
+        self.count=self.limited=0
+        self.peak_tilt=self.tilt_sq=self.error_sq=0.
+        self.tail={}
+        self.reset_settling()
+
+    def reset_settling(self):
+        self.settled_at=None
+        self.settled_samples=0
+
+    def add(self, packet):
+        tilt=packet['tilt']
+        error=packet['error_deg'] if self.torque else tilt
+        self.count+=1
+        self.limited+=packet['limited']
+        self.peak_tilt=max(self.peak_tilt,tilt)
+        self.tilt_sq+=tilt**2
+        self.error_sq+=error**2
+        self.tail=packet
+        if error<2:
+            if self.settled_samples==0:
+                self.settled_at=packet['time']
+            self.settled_samples+=1
+        else:
+            self.reset_settling()
+
+    def as_dict(self):
+        summary={
+            'duration_s':self.tail.get('time',0),'sample_count':self.count,
+            'peak_tilt_deg':self.peak_tilt if self.count else None,
+            'rms_tilt_deg':math.sqrt(self.tilt_sq/self.count) if self.count else None,
+            'final_tilt_deg':self.tail.get('tilt'),
+            'settling_time_s':self.settled_at if self.settled_samples>=26 else None,
+            'limited_pct':100*self.limited/self.count if self.count else 0,
+        }
+        if self.torque and self.count:
+            summary.update(target_deg=[self.tail['target_x'],self.tail['target_y']],
+                           final_error_deg=self.tail['error_deg'],
+                           rms_error_deg=math.sqrt(self.error_sq/self.count))
+        return summary
+
+
+class ContinuousTrace:
+    """每帧写入 JSONL 与 CSV，沿用现有 CSV 字段。"""
+    def __init__(self, json_file, csv_file):
+        self.json_file=json_file
+        self.csv_file=csv_file
+        self.writer=None
+        self.last_flush=time.monotonic()
+
+    def add(self, packet):
+        row=csv_row(packet)
+        if self.writer is None:
+            self.writer=csv.DictWriter(self.csv_file,fieldnames=list(row))
+            self.writer.writeheader()
+        self.json_file.write(json.dumps(packet,ensure_ascii=False,separators=(',',':'))+'\n')
+        self.writer.writerow(row)
+        now=time.monotonic()
+        if now-self.last_flush>=1.:
+            self.json_file.flush()
+            self.csv_file.flush()
+            self.last_flush=now
+
+
+def continuous_samples(folder):
+    with (folder/'telemetry.jsonl').open(encoding='utf-8',errors='replace') as file:
+        for line in file:
+            # 异常退出时末行可能只写了一部分。
+            if line.endswith('\n'):
+                yield json.loads(line)
+
+def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_disturbances=None,capture_pose=False,*,continuous=False):
     folder=ROOT/'runs'/run_id
     if record:folder.mkdir(exist_ok=True)
-    cfg=Experiment(**config);started=time.time();history=[];reason='completed';message='实验完成';preparation=None
+    cfg=Experiment(**config);started=time.time();history=[];reason='completed';message='实验完成'
     target_x,target_y=cfg.target_x_deg,cfg.target_y_deg
-    last_target_s=0.
+    deadline=math.inf if continuous else cfg.duration_s-1e-9
+    metrics=RunMetrics(cfg.control_law=='torque')
     playback=Playback(cfg)
+    files=ExitStack()
+    trace=None
     try:
+        if record and continuous:
+            trace=ContinuousTrace(
+                files.enter_context((folder/'telemetry.jsonl').open('w',encoding='utf-8',newline='\n')),
+                files.enter_context((folder/'telemetry.csv').open('w',encoding='utf-8-sig',newline='')),
+            )
         model,data,trim=make_model(cfg);prepared_pwm=initial_pwm(cfg)
         lib=load_native(build['dll'],cfg,prepared_pwm)
-        if cfg.auto_prepare_servos:
-            prepared_pwm,preparation=prepare_servos(cfg,model,data,trim,build,outbox,commands,run_id,lib,playback)
-            if prepared_pwm is None:raise PreparationStopped()
-            if hasattr(lib,'sim_set_initial_pwm'):lib.sim_set_initial_pwm(*prepared_pwm)
         site=model.site('body_reference').id;thrust_body=model.body('thrust_unit').id
         thrust_site=model.site('thrust_point').id;rocket=model.body('rocket_body').id
         rng=np.random.default_rng(cfg.seed);pending=deque();last_sample_t=0.;samples=0
@@ -456,17 +509,22 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
                               error_deg=math.hypot(truth[0]-target_x,truth[1]-target_y),
                               azimuth_rewind=out.status==2,motor_joint_torque_nm=motor_torque.tolist())
             if remember:
-                history.append(packet.copy() if capture_pose else {k:v for k,v in packet.items() if k!='pose'})
+                sample=packet.copy() if capture_pose else {k:v for k,v in packet.items() if k!='pose'}
+                metrics.add(sample)
+                if continuous:
+                    if trace is not None:trace.add(sample)
+                else:
+                    history.append(sample)
             outbox.put(packet)
 
         def handle(cmd,sim_time):
-            nonlocal push,push_until,target_x,target_y,last_target_s,balance_target
+            nonlocal push,push_until,target_x,target_y,balance_target
             if cmd['action']=='disturb':
                 push=np.array([cmd.get('x',0),cmd.get('y',.15),0.]);push_until=sim_time+.15
             elif cmd['action']=='target' and cfg.control_law=='torque':
                 if lib.sim_set_target(cmd['x'],cmd['y']):raise RuntimeError('C++ 控制器拒绝新目标角。')
                 target_x,target_y=cmd['x'],cmd['y']
-                last_target_s=sim_time
+                metrics.reset_settling()
             elif cmd['action']=='balance':
                 balance_target=cmd['position_mm']
                 return True
@@ -474,7 +532,7 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
 
         playback.rebase(data.time)
         publish()
-        while data.time<cfg.duration_s-1e-9:
+        while data.time<deadline:
             if not playback.ready(data.time,commands,publish,handle):
                 reason='stopped';message='实验已停止';break
             r=data.site_xmat[site].reshape(3,3)
@@ -495,6 +553,8 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
                 model.eq_data[balance_constraint,0]=balance_position(carriage_pwm)/1000
                 fill_input(.01)
                 code=lib.sim_step(ct.byref(inp),ct.byref(out))
+                if code==-8 and build.get('adapter')=='tvc':
+                    reason='failed';message='估计姿态超出闭环有效范围，已结束实验。';break
                 if code:raise RuntimeError(f'原生控制器返回错误 {code}（sim_step）。')
                 if not np.isfinite(np.ctypeslib.as_array(ct.cast(ct.pointer(out),ct.POINTER(ct.c_double)),shape=(13,))).all():
                     raise RuntimeError('控制器输出出现 NaN/Inf，已停止实验。')
@@ -531,42 +591,35 @@ def run_experiment(config,build,run_id,outbox,commands,record=True,scheduled_dis
             if not np.isfinite(data.qpos).all() or abs(data.qpos[:2]).max()>math.pi:
                 reason='failed';message='轴承转角超过 180°，结束本次姿态稳定测试。';break
             stepped=playback.advanced()
-            if stepped or (not playback.paused and tick%20==0) or data.time>=cfg.duration_s-1e-9:
+            if stepped or (not playback.paused and tick%20==0) or data.time>=deadline:
                 publish(remember=True)
-    except PreparationStopped:
-        reason='stopped';message='已停止舵机预定位，实验未开始。'
     except Exception as exc:
         reason='error';message=str(exc)
         if record:(folder/'error.log').write_text(traceback.format_exc(),encoding='utf-8')
-    tail=history[-1] if history else {}
-    tilt=np.array([p.get('tilt',math.hypot(p['x'],p['y'])) for p in history])
-    deviation=np.array([p['error_deg'] for p in history]) if cfg.control_law=='torque' else tilt
-    settled=None
-    for i in range(max(0,len(deviation)-25)):
-        if history[i]['time']>=last_target_s and np.max(deviation[i:])<2:
-            settled=history[i]['time'];break
-    if reason=='completed' and settled is None:
+    finally:
+        files.close()
+    statistics=metrics.as_dict()
+    if reason=='completed' and statistics['settling_time_s'] is None:
         message='实验运行结束，姿态未持续保持在目标误差 2° 内。'
-    summary={'id':run_id,'status':reason,'message':message,'duration_s':tail.get('time',0),'sample_count':len(history),
-      'peak_tilt_deg':float(tilt.max()) if len(tilt) else None,'rms_tilt_deg':float(np.sqrt(np.mean(tilt**2))) if len(tilt) else None,
-      'final_tilt_deg':float(tilt[-1]) if len(tilt) else None,'settling_time_s':settled,
-      'limited_pct':100*sum(p['limited'] for p in history)/len(history) if history else 0,
+    summary={'id':run_id,'status':reason,'message':message,**statistics,
       'created_at':time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(started)),
       'controller':build['fingerprint'],'scope':build['scope'],'mass_calibrated':False,'seed':cfg.seed,
-      'preparation':preparation,'control_law':cfg.control_law,
+      'control_law':cfg.control_law,
       'model_compensation':None}
     if cfg.control_law=='model' and reason!='error':
         from .model_control import model_compensation
         summary['model_compensation']=model_compensation(cfg)
-    if cfg.control_law=='torque' and len(deviation):
-        summary['target_deg']=[target_x,target_y]
-        summary['final_error_deg']=float(deviation[-1])
-        summary['rms_error_deg']=float(np.sqrt(np.mean(deviation**2)))
     if record:
-        (folder/'run.json').write_text(json.dumps({'config':config,'build':build},ensure_ascii=False,indent=2),encoding='utf-8')
+        manifest={'config':config,'build':build}
+        if continuous:
+            manifest['continuous']=True
+            if not metrics.count:
+                write_csv(folder,[])
+        else:
+            (folder/'telemetry.json').write_text(json.dumps(history,ensure_ascii=False),encoding='utf-8')
+            write_csv(folder,history)
+        (folder/'run.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
         (folder/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
-        (folder/'telemetry.json').write_text(json.dumps(history,ensure_ascii=False),encoding='utf-8')
-        write_csv(folder,history)
     outbox.put({'kind':'done','status':reason,'message':message,'summary':summary})
     return summary,history
 
@@ -580,16 +633,18 @@ class SimulationManager:
     def __init__(self):
         self.lock=threading.RLock();self.context=mp.get_context('spawn');self.process=None;self.latest=idle_packet();self.run_id=None
         self.outbox=None;self.commands=None;self.done=True;self.last_update=time.monotonic()
-        self.capture=[];self.current_config=None;self.current_build=None
+        self.capture=[];self.continuous=False;self.current_config=None;self.current_build=None
     @synchronized
-    def start(self,cfg,build):
+    def start(self,cfg,build,*,continuous=False):
         self.poll()
         if self.process and self.process.is_alive():raise ValueError('请先停止当前实验。')
         self.run_id=time.strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:5]
         self.outbox=self.context.Queue();self.commands=self.context.Queue();self.done=False
-        self.capture=[];self.current_config=cfg.model_dump();self.current_build=build
+        self.capture=[];self.continuous=continuous;self.current_config=cfg.model_dump();self.current_build=build
         self.latest=idle_packet()|{'status':'starting','run_id':self.run_id,'time':0,'playback_speed':cfg.playback_speed if cfg.realtime else 0.};self.last_update=time.monotonic()
-        self.process=self.context.Process(target=run_experiment,args=(cfg.model_dump(),build,self.run_id,self.outbox,self.commands),daemon=True)
+        self.process=self.context.Process(target=run_experiment,
+            args=(self.current_config,build,self.run_id,self.outbox,self.commands),
+            kwargs={'continuous':continuous},daemon=True)
         self.process.start();return {'run_id':self.run_id,'status':'starting'}
     @synchronized
     def poll(self):
@@ -600,7 +655,7 @@ class SimulationManager:
                 self.last_update=time.monotonic()
                 if p['kind']=='frame':
                     self.latest=p
-                    if p.get('phase')=='simulation' and p['time']>0 and (not self.capture or self.capture[-1]['time']!=p['time']):
+                    if not self.continuous and p.get('phase')=='simulation' and p['time']>0 and (not self.capture or self.capture[-1]['time']!=p['time']):
                         self.capture.append({k:v for k,v in p.items() if k!='pose'})
                 elif p['kind']=='status':self.latest|={'status':p['status']}
                 else:self.latest|=p;self.done=True
@@ -612,17 +667,29 @@ class SimulationManager:
         return self.latest
     def persist_crash(self,message):
         folder=ROOT/'runs'/self.run_id;folder.mkdir(exist_ok=True)
-        tilts=[p.get('tilt',0) for p in self.capture]
-        summary={'id':self.run_id,'status':'error','message':message,'duration_s':self.latest.get('time',0),
-          'sample_count':len(self.capture),'peak_tilt_deg':max(tilts) if tilts else None,
-          'rms_tilt_deg':math.sqrt(sum(v*v for v in tilts)/len(tilts)) if tilts else None,
-          'final_tilt_deg':tilts[-1] if tilts else None,'settling_time_s':None,
-          'limited_pct':100*sum(p['limited'] for p in self.capture)/len(self.capture) if self.capture else 0,
+        manifest={'config':self.current_config,'build':self.current_build}
+        torque=self.current_config['control_law']=='torque'
+        metrics=RunMetrics(torque)
+        if self.continuous:
+            manifest['continuous']=True
+            path=folder/'telemetry.jsonl'
+            path.touch(exist_ok=True)
+            for sample in continuous_samples(folder):
+                metrics.add(sample)
+            if not (folder/'telemetry.csv').is_file():
+                write_csv(folder,[])
+        else:
+            for sample in self.capture:
+                metrics.add(sample)
+            (folder/'telemetry.json').write_text(json.dumps(self.capture,ensure_ascii=False,indent=2),encoding='utf-8')
+            write_csv(folder,self.capture)
+        statistics=metrics.as_dict()
+        statistics.update(duration_s=self.latest.get('time',0),settling_time_s=None)
+        summary={'id':self.run_id,'status':'error','message':message,**statistics,
           'created_at':time.strftime('%Y-%m-%d %H:%M:%S'),'controller':self.current_build['fingerprint'],
           'scope':self.current_build['scope'],'mass_calibrated':False,'seed':self.current_config['seed']}
-        for name,value in [('summary',summary),('run',{'config':self.current_config,'build':self.current_build}),('telemetry',self.capture)]:
+        for name,value in [('run',manifest),('summary',summary)]:
             (folder/(name+'.json')).write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf-8')
-        write_csv(folder,self.capture)
         self.latest|={'kind':'done','status':'error','message':message,'summary':summary};self.done=True
     @synchronized
     def command(self,action,**values):
@@ -634,10 +701,17 @@ class SimulationManager:
         if action=='step' and latest['status']!='paused':
             raise ValueError('请先暂停实验，再单步推进。')
         if action=='balance' and latest.get('phase')!='simulation':
-            raise ValueError('预定位结束后可以修改滑架位置。')
+            raise ValueError('实验启动后可以修改滑架位置。')
         self.commands.put({'action':action,**values})
     @synchronized
     def close(self):
         if self.process and self.process.is_alive():
-            self.commands.put({'action':'stop'});self.process.join(3)
-            if self.process.is_alive():self.process.terminate();self.process.join(2)
+            self.commands.put({'action':'stop'})
+            deadline=time.monotonic()+3
+            while self.process.is_alive() and time.monotonic()<deadline:
+                self.process.join(.05)
+                self.poll()
+            if self.process.is_alive():
+                self.process.terminate()
+                self.process.join(2)
+            self.poll()

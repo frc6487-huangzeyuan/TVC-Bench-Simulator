@@ -5,6 +5,9 @@
 #include "ThrustTorqueControl.h"
 static ThrustTorqueControl torque;
 static bool torqueEnabled=false;
+#ifdef TVC_TORQUE_ESC_STEP_API
+static int sentEscUs=1500;
+#endif
 #endif
 #include <memory>
 // 直接调用工程原始头文件，不在 Python/JavaScript 中重写 PID。
@@ -18,6 +21,9 @@ SIM_API int sim_abi_version(){return 1;}
 SIM_API void sim_reset(const SimConfig* c){
 #if __has_include("ThrustTorqueControl.h")
   torqueEnabled=false;
+#ifdef TVC_TORQUE_ESC_STEP_API
+  sentEscUs=1500;
+#endif
 #endif
   settings=*c; attitude=Attitude(); sent[0]=sent[1]=1500;
   for(int k=0;k<3;++k)previous_gyro[k]=0;
@@ -55,30 +61,6 @@ SIM_API int sim_set_target(double x,double y) {
   return torqueEnabled&&torque.setTarget(float(x),float(y))?0:-1;
 }
 #endif
-SIM_API int sim_preposition(double x,double y,double current_azimuth,double *pwm){
-#if __has_include("ThrustTorqueControl.h")
-  if(torqueEnabled){
-    int current[2]={GimbalPid::angleToUs(float(current_azimuth),0),sent[1]},goal[2];
-    if(!torque.prepare(pidConfig,float(x),float(y),current,goal))return -1;
-    pwm[0]=goal[0];pwm[1]=goal[1];return 0;
-  }
-#endif
-  float vx,vy,azimuth,elevation;
-#ifdef TVC_MODEL_COMPENSATION_API
-  GimbalPid::initialVector(pidConfig,float(x),float(y),vx,vy);
-  current_azimuth=GimbalPid::initialAzimuthReference(pidConfig,float(current_azimuth),vx,vy);
-#else
-  vx=pidConfig.signX*std::max(-pidConfig.limit,std::min(pidConfig.limit,-pidConfig.x.kp*float(x)));
-  vy=pidConfig.signY*std::max(-pidConfig.limit,std::min(pidConfig.limit,-pidConfig.y.kp*float(y)));
-  const float magnitude=std::hypot(vx,vy);
-  if(magnitude>pidConfig.limit){vx*=pidConfig.limit/magnitude;vy*=pidConfig.limit/magnitude;}
-#endif
-  if(!std::isfinite(vx)||!std::isfinite(vy))return -1;
-  GimbalPid::vectorToAngles(vx,vy,float(current_azimuth),pidConfig.azimuthZero,azimuth,elevation);
-  pwm[0]=limitServoUs(0,GimbalPid::angleToUs(azimuth,0));
-  pwm[1]=limitServoUs(1,GimbalPid::angleToUs(elevation,1));return 0;
-}
-// sim_api v1 可选扩展，仅设置仿真释放前的执行器状态，不修改原飞控源码。
 SIM_API void sim_set_initial_pwm(double azimuth_us,double elevation_us){
   sent[0]=int(std::lround(azimuth_us));sent[1]=int(std::lround(elevation_us));
 }
@@ -95,16 +77,29 @@ SIM_API int sim_step(const SimInput* i,SimOutput* o){
   if(!projectHistory(attitude,previous_gyro,uint64_t(i->sample_age_s*1e6),150000,predicted))return -6;
   AttitudeMatrix r=predicted.rotation();
   if(settings.use_truth>.5)for(int a=0;a<3;++a)for(int b=0;b<3;++b)r.m[a][b]=float(i->truth_rotation[a*3+b]);
+#ifdef TVC_GIMBAL_UPRIGHT_API
+  if(!gimbalControlUpright(r))return -8;
+#endif
   float x,y;if(!gimbalLean(r,x,y))return -4;
   int target[2]={sent[0],sent[1]};
 #if __has_include("ThrustTorqueControl.h")
   if(torqueEnabled){
+#ifdef TVC_TORQUE_ESC_STEP_API
+    const TorqueEscStep esc{1500,1700,sentEscUs,5};
+    if(i->sample_age_s>.05 || !torque.update(pidConfig,uint64_t(i->time_us),r,previous_gyro,sent,target,&esc))return -7;
+    sentEscUs=esc.nextUs(torque.throttlePct);
+#else
     if(i->sample_age_s>.05 || !torque.update(pidConfig,uint64_t(i->time_us),r,previous_gyro,sent,target))return -7;
+#endif
     for(int k=0;k<2;++k){
       o->pwm_us[k]=sent[k]=target[k];
       o->pid[3*k]=torque.terms[k].p;o->pid[3*k+1]=torque.terms[k].i;o->pid[3*k+2]=torque.terms[k].d;
     }
+#ifdef TVC_TORQUE_ESC_STEP_API
+    o->throttle_pct=(sentEscUs-1500)*.5;
+#else
     o->throttle_pct=torque.throttlePct;
+#endif
     o->estimated_lean_deg[0]=x;o->estimated_lean_deg[1]=y;
     o->limited=torque.limited?1:0;o->status=1;
 #ifdef TVC_AZIMUTH_REWIND_API

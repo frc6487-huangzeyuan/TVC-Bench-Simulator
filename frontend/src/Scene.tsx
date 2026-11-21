@@ -4,11 +4,13 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {STLLoader} from 'three/addons/loaders/STLLoader.js';
 import {Crosshair,RotateCcw,Scan,Grid2X2,Move3D,MoveHorizontal,LoaderCircle} from 'lucide-react';
 import type {Frame,Pose,BodyPreview,Triple} from './types';
+import {ACTUATOR_COLORS} from './actuatorColors';
 
-const colors:Record<string,number>={base:0x76818a,outer_frame:0x4a555e,rocket_body:0x238b94,azimuth_stage:0x29323c,thrust_unit:0xc27d50,balance_carriage:0xe0ac50};
+const colors:Record<string,THREE.ColorRepresentation>={base:0x76818a,outer_frame:0x4a555e,rocket_body:0x238b94,azimuth_stage:ACTUATOR_COLORS.azimuth,thrust_unit:ACTUATOR_COLORS.elevation,balance_carriage:0xe0ac50};
 type PropellerGeometry={pivot_m:Triple;shaft_axis:Triple;elevation_axis:Triple};
 type Overlay={body:BodyPreview;totalCom:Triple;showInertia:boolean};
-export default function Scene({frame,overlay}:{frame:(Pick<Frame,'pose'|'thrust'>&Partial<Frame>)|null;overlay?:Overlay}){
+type DeviceStatus={text:string;live:boolean};
+export default function Scene({frame,overlay,deviceStatus}:{frame:(Pick<Frame,'pose'|'thrust'>&Partial<Frame>)|null;overlay?:Overlay;deviceStatus?:DeviceStatus}){
   const host=useRef<HTMLDivElement>(null),latest=useRef(frame),reset=useRef(()=>{}),focusElevation=useRef(()=>{}),
     focusBalance=useRef(()=>{}),showBalance=useRef(false),gridToggle=useRef(()=>{}),wireToggle=useRef(()=>{});
   const [loading,setLoading]=useState(true),[error,setError]=useState(''),[grid,setGrid]=useState(true),[wire,setWire]=useState(false);
@@ -128,7 +130,7 @@ export default function Scene({frame,overlay}:{frame:(Pick<Frame,'pose'|'thrust'
     return()=>{disposed=true;cancelAnimationFrame(animation);resize.disconnect();controls.dispose();scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());}});renderer.dispose();renderer.domElement.remove();};
   },[]);
   return <div className="scene-wrap"><div className="scene-canvas" ref={host}/>
-    <div className="scene-label"><span className="live-dot"/>{overlay?'质量分布':'物理场景'}<span className="scene-label-muted">{overlay?'COM · INERTIA':'MUJOCO · 1 kHz'}</span></div>
+    <div className="scene-label"><span className={deviceStatus&&!deviceStatus.live?'offline-dot':'live-dot'}/>{deviceStatus?deviceStatus.text:overlay?'质量分布':'物理场景'}{!deviceStatus&&<span className="scene-label-muted">{overlay?'COM · INERTIA':'MUJOCO · 1 kHz'}</span>}</div>
     <div className="scene-tools"><button title="恢复视角" onClick={()=>reset.current()}><RotateCcw size={16}/></button><button title="俯仰特写" aria-label="俯仰特写" disabled={loading||!!error} onClick={()=>focusElevation.current()}><Crosshair size={16}/></button>
       {!overlay&&<button title="重心滑架特写（隐藏箭体外壳）" aria-label="重心滑架特写" disabled={loading||!!error||!frame?.balance} onClick={()=>focusBalance.current()}><MoveHorizontal size={16}/></button>}
       <button title="网格" className={grid?'selected':''} onClick={()=>{gridToggle.current();setGrid(!grid);}}><Grid2X2 size={16}/></button><button title="线框" className={wire?'selected':''} onClick={()=>{wireToggle.current();setWire(!wire);}}><Scan size={16}/></button></div>

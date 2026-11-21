@@ -9,7 +9,14 @@ export class LineDecoder{
   push(bytes,onLine,onError){const chunk=typeof bytes==='string'?bytes:this.decoder.decode(bytes,{stream:true});for(const c of chunk){if(c==='\n'){if(this.discard)onError(new Error('FRAME_TOO_LONG'));else if(this.buffer.trim()&&!this.buffer.startsWith('#IMU1 ')){try{onLine(decodeFrame(this.buffer.replace(/\r$/,'')));}catch(e){onError(e);}}this.buffer='';this.discard=false;}else if(!this.discard){this.buffer+=c;if(this.buffer.length>MAX_FRAME){this.buffer='';this.discard=true;}}}}
 }
 const vector=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
-export function servoAngleToUs(angle,channel){const range=channel===0?360:270;const n=Number(angle),low=channel===1?100:0,high=channel===1?170:360;if(!Number.isFinite(n)||n<low||n>high)throw new Error(channel===1?'俯仰限位：−35～+35°':'舵机角度超出范围');return Math.round(500+n*2000/range);}
+export function servoAngleToUs(angle,channel,limits){
+ const range=channel===0?360:270,n=Number(angle);
+ const calibrated=Array.isArray(limits)&&limits.length===2&&limits.every(Number.isFinite)&&limits[0]<=limits[1];
+ const [low,high]=calibrated?limits:channel===1?[100,170]:[0,360];
+ if(!Number.isFinite(n)||n<low-1e-6||n>high+1e-6)
+   throw new Error(!calibrated&&channel===1?'俯仰限位：−35～+35°':'舵机角度超出范围');
+ return Math.round(500+Math.max(low,Math.min(high,n))*2000/range);
+}
 export function servoUsToAngle(us,channel){return (Number(us)-500)*(channel===0?360:270)/2000;}
 export function validatePidSettings(c){
   for(const key of ['kp_x','ki_x','kd_x','kp_y','ki_y','kd_y'])if(!Number.isFinite(c[key])||c[key]<0||c[key]>(key.startsWith('kp')?10:2))throw new Error('PID 参数超出试调范围');

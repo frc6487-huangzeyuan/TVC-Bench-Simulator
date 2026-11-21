@@ -19,7 +19,12 @@ const outputsActive=()=>!!(S.tele&&(S.tele.outputs.servo_enabled||S.tele.outputs
 
 export const responseNoticeType=error=>error?.code==='RESPONSE_TIMEOUT'?'warning':'error';
 function notice(message,type=''){window.dispatchEvent(new CustomEvent('tvc-native-notice',{detail:{message,type}}));}
-function describeReason(reason){if(reason==='FAULT_REQUIRES_RESTART')return `重新校准被当前故障拒绝；原始 fault：${S.tele?.fault||'未知，请查看原始故障码区域'}`;return ({ELEVATION_LIMIT:'俯仰命令超出设备当前限位，请检查固件版本',THROTTLE_NOT_READY:'自动油门尚未就绪',AUTO_THROTTLE_ACTIVE:'自动油门正在接管电机',THROTTLE_CONFIG:'自动油门参数无效',IMU_NOT_FOUND:'目标 IMU 未检测到，已保留原数据源',INVALID_IMU_SOURCE:'IMU 数据源编号无效',CONTROLLER_BUSY:'已有另一个控制页面连接，请先断开它',AUTH_REQUIRED:'无线认证失败',SESSION_MISMATCH:'连接会话已失效',STALE_COMMAND:'设备数据过期，请重新连接',MODE_LOCKED:'当前不在对应控制模式',NOT_READY:'设备尚未准备好',USE_SERVO_CALIBRATION:'方位零位请在方向标定中调整',SERVO_CALIBRATION_RANGE:'舵机标定参数超出范围',SERVO_CALIBRATION_SAVE:'设备保存舵机标定失败',SERVO_TRAVEL_MOVING:'请等待当前步进完成',SERVO_TRAVEL_ENDPOINTS:'请从零位分别移动到两个端点',SERVO_TRAVEL_ACTIVE:'请先结束行程标定',SERVO_TRAVEL_ZERO_LOCKED:'请用快速标定重新记录该轴零位',CALIBRATION_STORAGE:'设备无法保存或恢复 IMU 校准',STOP_OUTPUTS_FIRST:'请先停止全部输出',WORLD_NOT_READY:'世界坐标系尚未建立',CONFIG_MISMATCH:'电调配置已变化，请重试',OLD_EPOCH:'控制状态已变化，请重试'})[reason]||reason;}
+const mountErrors={
+  IMU_NOT_READY:'当前 IMU 没有新鲜采样，请检查连接与采样状态',
+  MOUNT_POSE_RANGE:'设备拒绝标定数据，请重新采集竖直与倾斜姿态',
+  MOUNT_RETURN_UPRIGHT:'请让箭体回到竖直并保持静止，再保存',
+};
+function describeReason(reason){if(reason==='FAULT_REQUIRES_RESTART')return `重新校准被当前故障拒绝；原始 fault：${S.tele?.fault||'未知，请查看原始故障码区域'}`;return ({ELEVATION_CENTER_AT_LIMIT:'俯仰中位必须留出双向行程，请远离端点或重新记录三点',ELEVATION_LIMIT:'俯仰命令超出设备当前限位，请检查固件版本',THROTTLE_NOT_READY:'自动油门尚未就绪',AUTO_THROTTLE_ACTIVE:'自动油门正在接管电机',THROTTLE_CONFIG:'自动油门参数无效',IMU_NOT_FOUND:'目标 IMU 未检测到，已保留原数据源',INVALID_IMU_SOURCE:'IMU 数据源编号无效',CONTROLLER_BUSY:'已有另一个控制页面连接，请先断开它',AUTH_REQUIRED:'无线认证失败',SESSION_MISMATCH:'连接会话已失效',STALE_COMMAND:'设备数据过期，请重新连接',MODE_LOCKED:'当前不在对应控制模式',NOT_READY:'设备尚未准备好',USE_SERVO_CALIBRATION:'方位零位请在方向标定中调整',SERVO_CALIBRATION_RANGE:'舵机标定参数超出范围',SERVO_CALIBRATION_SAVE:'设备保存舵机标定失败',SERVO_TRAVEL_MOVING:'请等待当前步进完成',SERVO_TRAVEL_ENDPOINTS:'请从零位分别移动到两个端点',SERVO_TRAVEL_ACTIVE:'请先结束行程标定',SERVO_TRAVEL_ZERO_LOCKED:'请用快速标定重新记录该轴零位',CALIBRATION_STORAGE:'设备无法保存或恢复 IMU 校准',STOP_OUTPUTS_FIRST:'请先停止全部输出',WORLD_NOT_READY:'世界坐标系尚未建立',CONFIG_MISMATCH:'电调配置已变化，请重试',OLD_EPOCH:'控制状态已变化，请重试'})[reason]||reason;}
 
 function acceptPacket(p){
   if(!p||p.v!==VERSION||p.session!==S.session)return;
@@ -29,7 +34,7 @@ function acceptPacket(p){
     if(Number.isInteger(p.epoch))S.epoch=Math.max(S.epoch,p.epoch);
     if(Number.isInteger(p.config_rev))S.rev=Math.max(S.rev,p.config_rev);
     const waiter=S.pending.get(p.request_seq);
-    if(waiter){clearTimeout(waiter.timer);S.pending.delete(p.request_seq);p.ok?waiter.resolve(p):waiter.reject(new Error(describeReason(p.reason)));}
+    if(waiter){clearTimeout(waiter.timer);S.pending.delete(p.request_seq);p.ok?waiter.resolve(p):waiter.reject(new Error(mountErrors[p.reason]||describeReason(p.reason)));}
   }else if(isTelemetry(p)){
     if(S.boot&&p.boot!==S.boot)return;
     S.boot=p.boot;S.epoch=Math.max(S.epoch,p.epoch);S.rev=Math.max(S.rev,p.config_rev);S.tele=p;S.lastRx=performance.now();recordTrend(p);if(S.mode==='serial'||S.mode==='wifi')window.dispatchEvent(new CustomEvent('tvc-native-telemetry',{detail:{packet:p,transport:S.mode==='serial'?'usb':'wifi'}}));
@@ -37,9 +42,8 @@ function acceptPacket(p){
     S.warningShown=p.warning;
     if(p.calibrating||p.operating_mode!=='ATTITUDE')resetAutoMotor();
     if(p.fault&&p.fault!==S.faultShown){
-      const expectedMountResult=S.operation?.kind==='mount'&&p.fault==='MOUNT_REZERO_REQUIRED';
-      S.faultShown=p.fault;resetAutoMotor();if(!expectedMountResult)cancelActions();S.heartbeat=false;
-      notice(faultDescription(p),expectedMountResult?'warning':'error');
+      S.faultShown=p.fault;resetAutoMotor();cancelActions();S.heartbeat=false;
+      notice(faultDescription(p),'error');
     }
     if(!p.fault)S.faultShown='';
   }
@@ -51,6 +55,8 @@ const abort=()=>Object.assign(new Error('操作已取消'),{name:'AbortError'});
 function ticket(){return {generation:S.generation,action:S.action,session:S.session};}
 function check(t){if(t&&(t.generation!==S.generation||t.action!==S.action||t.session!==S.session||!S.mode||document.hidden))throw abort();}
 function cancelActions(){
+  mountError='';
+  mountPose=null;
   ++S.action;S.operation=null;clearQueuedServo();clearTimeout(motorTimer);clearTimeout(autoMotorTimer);
   for(const [seq,p] of S.pending)if(p.guard){clearTimeout(p.timer);S.pending.delete(seq);p.reject(abort());}
 }
@@ -82,7 +88,7 @@ function sendCommand(cmd,data={},timeout=1800,guard){
     },guard).catch(error=>{clearTimeout(timer);S.pending.delete(seq);reject(error);});
   });
 }
-const immediate=new Set(['hello','heartbeat','keepalive','stop','servo_disable','esc_stop','auto_disable','auto_motor_disable','tilt_throttle_disable','cg_servo_hold','cg_servo_disable']);
+const immediate=new Set(['hello','heartbeat','keepalive','stop','servo_disable','esc_stop','auto_disable','auto_motor_disable','tilt_throttle_disable','cg_servo_hold','cg_servo_disable','servo_travel_hold']);
 function command(cmd,data={},timeout=1800,guard){
   if(immediate.has(cmd))return sendCommand(cmd,data,timeout,guard);
   const t=guard||ticket();
@@ -99,8 +105,6 @@ async function waitTelemetry(test=()=>true,timeout=5000,guard){
   throw new Error('等待设备状态超时');
 }
 function resetSession(){
-  mountPose=null;
-  mountProgress='';
   resetAutoMotor();cancelActions();S.session=makeSession();S.seq=0;S.boot='';S.epoch=S.rev=0;S.tele=null;S.lastRx=0;S.faultShown='';S.warningShown='';
   S.writeChain=Promise.resolve();S.controlChain=Promise.resolve();S.healthPending=false;S.lastKeepalive=0;
 }
@@ -298,7 +302,6 @@ async function startAutomatic(){return operation('auto',async t=>{
     if(coupled){
       if(!S.tele?.control?.tilt_throttle)throw Error('当前固件不支持倾斜自动油门，请更新主控');
       if(config.rate_gain_pct_dps>0&&typeof S.tele?.control?.tilt_throttle?.rate_gain_pct_dps!=='number')throw Error('主控固件不支持角速度油门，请先更新固件');
-      if(typeof S.tele?.control?.preposition_active!=='boolean')throw Error('主控固件不支持电机启动前预定位，请更新主控');
       await command('tilt_throttle_config',config,1800,t);check(t);
       await command('auto_motor_enable',{},1800,t);check(t);
       validateEscConfig(ESC);await command('esc_config',ESC,1800,t);check(t);
@@ -354,43 +357,87 @@ export async function startThrustTorque(config,x,y){
 }
 async function recalibrate(){resetAutoMotor();cancelActions();S.heartbeat=false;return operation('calibrate',t=>command('calibrate',{},3500,t));}
 let mountPose=null;
-async function captureMount(leaned){
-  if(S.tele?.control?.mount_method!=='TWO_POSE')throw Error('当前固件不支持两姿态安装标定，请更新支持该功能的主控固件');
-  if(S.tele.operating_mode!=='ATTITUDE'||S.tele.calibrating)throw Error('请切换到姿态模式并等待静止校准结束');
-  if(outputsActive())throw Error('请先停止舵机和电机');
-  await operation('mount',async t=>{
-    const source=S.tele?.control?.source_id;
-    if(leaned&&(!mountPose||mountPose.source!==source||mountPose.session!==S.session))throw Error('请先采集当前 IMU 的竖直姿态');
-    const rows=[],end=performance.now()+2200;let previous=-1;
-    setMountProgress('正在采集，请保持静止…');
-    while(performance.now()<end){
-      check(t);const p=S.tele,s=p?.control_imu;
-      if(!fresh()||p.control.source_id!==source||outputsActive())throw Error('连接、数据源或输出状态已变化，请重新采集');
-      if(s?.valid&&p.t_us-s.sample_t_us<50000&&s.sample_t_us!==previous){
-        previous=s.sample_t_us;rows.push([...s.a,...s.g]);
-      }
-      await delay(50);
+let mountError='';
+const mountAvailable=()=>fresh()&&S.tele.control?.mount_method==='GUIDED_TILT'&&
+  S.tele.operating_mode==='ATTITUDE'&&!S.tele.calibrating&&!outputsActive();
+function activeMountPose(){
+  return mountPose&&mountAvailable()&&mountPose.source===S.tele.control.source_id&&mountPose.epoch===S.epoch?mountPose:null;
+}
+const mountVector=value=>Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);
+function mountSample(p){
+  const s=p.control_imu,age=p.t_us-s?.sample_t_us;
+  return s?.valid&&s.source_id===p.control.source_id&&age>=0&&age<50000&&mountVector(s.a)?s:null;
+}
+function mountAngle(a,b){
+  const norms=Math.hypot(...a)*Math.hypot(...b);
+  if(norms<.5)return null;
+  const cosine=a.reduce((sum,v,i)=>sum+v*b[i],0)/norms;
+  return Math.acos(Math.max(-1,Math.min(1,cosine)))*180/Math.PI;
+}
+async function sampleMountPose(t,source,epoch){
+  const rows=[],end=performance.now()+2200;
+  let previous=-1;
+  while(performance.now()<end){
+    check(t);
+    if(!mountAvailable()||S.tele.control.source_id!==source||S.epoch!==epoch)
+      throw Error('连接、IMU 来源或输出状态发生变化，请重新采集竖直姿态');
+    const s=mountSample(S.tele);
+    if(s&&s.sample_t_us>previous&&mountVector(s.g)&&mountVector(s.bias)){
+      previous=s.sample_t_us;
+      rows.push([...s.a,...s.g.map((v,i)=>v+s.bias[i])]);
     }
-    if(rows.length<15||rows.some(r=>r.length!==6||r.some(v=>!Number.isFinite(v))))throw Error('有效采样不足，请检查 IMU 数据');
-    const mean=Array.from({length:6},(_,k)=>rows.reduce((sum,r)=>sum+r[k],0)/rows.length);
-    const variance=mean.map((m,k)=>rows.reduce((sum,r)=>sum+(r[k]-m)**2,0)/rows.length);
-    const norm=Math.hypot(...mean.slice(0,3));
-    if(norm<.85||norm>1.15||variance.some((v,k)=>v>(k<3?.0025:4))||mean.slice(3).some(v=>Math.abs(v)>=15))throw Error('采样期间不够静止，请保持姿态后重试');
-    const a=mean.slice(0,3);
-    if(!leaned){mountPose={source,session:S.session,a};setMountProgress('竖直姿态已采集。朝 Type-C／轴承侧倾斜 10～25°，保持静止，点击步骤②。');}
-    else {
-      const cs=a.reduce((sum,v,k)=>sum+v*mountPose.a[k],0)/(Math.hypot(...a)*Math.hypot(...mountPose.a));
-      const angle=Math.acos(Math.max(-1,Math.min(1,cs)))*180/Math.PI;
-      if(angle<8||angle>30)throw Error('两姿态夹角需为 8～30°，请调整后重试步骤②');
-      const ack=await command('mount_config',{source_id:source,upright:mountPose.a,leaned:a},3500,t);
-      await waitTelemetry(p=>p.epoch>=ack.epoch&&p.control.mount_reference_ready===true,2500,t);
-      mountPose=null;setMountProgress('安装方向和默认主 IMU 已保存。恢复箭体竖直，点击“竖直静止校准”；不会自动启动输出。');
+    await delay(50);
+  }
+  check(t);
+  if(!mountAvailable()||S.tele.control.source_id!==source||S.epoch!==epoch)
+    throw Error('连接、IMU 来源或输出状态发生变化，请重新采集竖直姿态');
+  if(rows.length<15)throw Error('有效采样不足，请检查 IMU 数据');
+  const mean=Array.from({length:6},(_,k)=>rows.reduce((sum,r)=>sum+r[k],0)/rows.length);
+  const variance=mean.map((m,k)=>rows.reduce((sum,r)=>sum+(r[k]-m)**2,0)/rows.length);
+  const a=mean.slice(0,3),bias=mean.slice(3),norm=Math.hypot(...a);
+  if(norm<.85||norm>1.15||variance.some((v,k)=>v>(k<3?.0025:4))||bias.some(v=>Math.abs(v)>=15))
+    throw Error('采样期间不够静止，请保持姿态后重试');
+  return {a,bias};
+}
+export function resetMount(){
+  mountError='';
+  mountPose=null;
+  render();
+}
+async function captureMount(step,direction){
+  if(!mountAvailable())throw Error('需连接支持安装方向标定的主控，切换到姿态模式并停止全部输出');
+  mountError='';
+  await operation('mount-'+step,async t=>{
+    const {source_id:source}=S.tele.control,epoch=S.epoch;
+    if(step==='upright'){
+      mountPose=null;
+      mountPose={source,epoch,...await sampleMountPose(t,source,epoch)};
+      return;
     }
-  }).catch(error=>{setMountProgress(error.name==='AbortError'?'采集已取消，请重新开始。':error.message);throw error;});
+    const pose=activeMountPose();
+    if(!pose)throw Error('请先采集当前 IMU 的竖直姿态');
+    if(step==='leaned'){
+      if(!Number.isInteger(direction)||direction<0||direction>3)throw Error('请选择倾斜方向');
+      const {a}=await sampleMountPose(t,source,epoch);
+      const angle=mountAngle(pose.a,a);
+      if(angle===null||angle<8||angle>30)throw Error('倾斜角需为 8～30°，请调整后重试');
+      pose.leaned=a;
+      pose.direction=direction;
+      return;
+    }
+    if(step!=='save'||!pose.leaned)throw Error('请先采集倾斜姿态');
+    const s=mountSample(S.tele),angle=s&&mountAngle(pose.a,s.a);
+    if(angle==null||angle>3)throw Error('请先让箭体回到竖直并保持静止');
+    const ack=await command('mount_config',{source_id:source,direction:pose.direction,upright:pose.a,leaned:pose.leaned,bias:pose.bias},3500,t);
+    mountPose=null;
+    await waitTelemetry(p=>p.epoch>=ack.epoch&&p.config_rev>=ack.config_rev&&p.control.source_id===source&&
+      p.control.mount_reference_ready===true,2500,t);
+  }).catch(error=>{
+    if(error.name!=='AbortError')mountError=error.message;
+    throw error;
+  });
 }
 async function switchImuSource(source){
-  mountPose=null;
-  mountProgress='';
   if(!S.mode||!fresh())throw new Error('请先连接主控');
   await stopAll();
   await operation('source',async t=>{
@@ -418,7 +465,6 @@ async function toggleAutoMotor(){
 async function startAutoMotor(){return operation('auto-motor',async t=>{
   if(S.autoThrottleWanted||S.tele?.control?.tilt_throttle?.enabled)throw Error('倾斜自动油门已接管，不能同时手动调速');
   if(!S.autoFanWanted||!S.tele?.control?.auto_motor_allowed||S.tele.operating_mode!=='ATTITUDE')throw new Error('请先勾选启用电机调速');
-  if(typeof S.tele?.control?.preposition_active!=='boolean')throw Error('主控固件不支持电机启动前预定位，请更新主控');
   validateEscConfig(ESC);S.heartbeat=true;await command('heartbeat',{},1800,t);check(t);
   try{
     if(!S.tele.outputs.esc_armed){
@@ -462,10 +508,17 @@ function renderImu1(packet,isFresh){
 }
 const pidInputs={'kp-x':'kp_x','ki-x':'ki_x','kd-x':'kd_x','kp-y':'kp_y','ki-y':'ki_y','kd-y':'kd_y','max-tilt':'max_tilt_deg','azimuth-zero':'azimuth_zero_deg','sign-x':'sign_x','sign-y':'sign_y'};
 function formatVector(values,digits){return Array.isArray(values)&&values.length===3?values.map(v=>Number.isFinite(v)?v.toFixed(digits):'—').join(' / '):'— / — / —';}
-function settingsFromPacket(p){const c=p?.control,pid=c?.pid;if(!pid?.x||!pid?.y)return null;return {kp_x:pid.x.kp,ki_x:pid.x.ki,kd_x:pid.x.kd,kp_y:pid.y.kp,ki_y:pid.y.ki,kd_y:pid.y.kd,max_tilt_deg:pid.output_limit_deg,azimuth_zero_deg:c.azimuth_zero_deg,sign_x:c.sign_x,sign_y:c.sign_y};}
+function settingsFromPacket(p){const c=p?.control,pid=c?.pid;if(!pid?.x||!pid?.y)return null;return {kp_x:pid.x.kp,ki_x:pid.x.ki,kd_x:pid.x.kd,kp_y:pid.y.kp,ki_y:pid.y.ki,kd_y:pid.y.kd,max_tilt_deg:pid.output_limit_deg,azimuth_zero_deg:c.azimuth_zero_deg,sign_x:c.sign_x,sign_y:c.sign_y,trim_x_deg:pid.trim_x_deg,trim_y_deg:pid.trim_y_deg};}
 async function applyPid(){
   const settings=validatePidSettings(Object.fromEntries(Object.entries(pidInputs).map(([id,key])=>[key,
     key==='azimuth_zero_deg'&&S.tele?.control?.servo_calibration ? S.tele.control.azimuth_zero_deg : Number($(id).value)])));
+  if(S.tele?.control?.model_enabled===false && Number.isFinite(S.tele.control?.pid?.trim_x_deg)){
+    settings.trim_x_deg=Number($('trim-x').value);
+    settings.trim_y_deg=Number($('trim-y').value);
+    if(!Number.isFinite(Math.hypot(settings.trim_x_deg,settings.trim_y_deg)) ||
+        Math.hypot(settings.trim_x_deg,settings.trim_y_deg)>Math.min(25,settings.max_tilt_deg))
+      throw Error('配平偏转向量不能超过有效纠偏上限');
+  }
   await operation('pid',async t=>{
     const ack=await command('pid_config',settings,2000,t);
     await waitTelemetry(p=>p.epoch>=ack.epoch&&Object.entries(settings).every(([key,value])=>Math.abs(settingsFromPacket(p)?.[key]-value)<.0001),2500,t);
@@ -519,9 +572,14 @@ function drawTrend(isFresh){
   $('chart-state').textContent=!S.trend.length?'等待真实设备数据':!isFresh?'连接中断 · 保留已接收曲线':history==='PREDICTED'?`${name} · 历史角速度估算（非新测量）`:history==='HELD'?`${name} · 保持历史估计，等待新样本`:`${name} · 倾斜角 °`;
 }
 
-let mountProgress='';
-function setMountProgress(value){mountProgress=value;render();}
-function render(){window.dispatchEvent(new CustomEvent('tvc-native-state',{detail:{mode:S.mode,connecting:S.connecting,tele:S.tele,lastRx:S.lastRx,operation:S.operation?.kind||'',stopping:S.stopping,heartbeat:S.heartbeat,autoFanWanted:S.autoFanWanted,autoThrottleWanted:S.autoThrottleWanted,mountProgress,mountBaseline:!!mountPose&&mountPose.source===S.tele?.control?.source_id&&mountPose.session===S.session}}));}
+function render(){
+  const pose=activeMountPose(),sample=pose&&mountSample(S.tele);
+  window.dispatchEvent(new CustomEvent('tvc-native-state',{detail:{
+    mode:S.mode,connecting:S.connecting,tele:S.tele,lastRx:S.lastRx,operation:S.operation?.kind||'',stopping:S.stopping,
+    heartbeat:S.heartbeat,autoFanWanted:S.autoFanWanted,autoThrottleWanted:S.autoThrottleWanted,
+    mountBaseline:!!pose,mountTilted:!!pose?.leaned,mountError,mountAngle:sample?mountAngle(pose.a,sample.a):null,
+  }}));
+}
 let nativeTimer=null;
 function nativeTick(){
   if(S.mode&&S.boot&&!document.hidden&&fresh()){
@@ -549,31 +607,51 @@ export async function saveServoCalibration(settings){
       Object.entries(settings).every(([key,value])=>key==='azimuth_deg'?Math.abs(p.control?.servo_calibration?.[key]-value)<0.051:p.control?.servo_calibration?.[key]===value),2500,t);
   });
 }
-export async function startServoTravel(axis){
-  await operation('servo-travel',async t=>{
-    if(!fresh()||!S.tele.control?.servo_travel)throw Error('需要支持行程标定的固件');
-    if(outputsActive()||S.tele.calibrating)throw Error('请先停止全部输出');
-    S.heartbeat=true;
-    await command('heartbeat',{},1800,t);
-    const explicit=!!S.tele.control.servo_travel.capture_endpoints;
-    const ack=await command('servo_travel_start',{axis,explicit_endpoints:explicit},1800,t);
-    await waitTelemetry(p=>p.epoch>=ack.epoch&&p.control?.servo_travel?.axis===axis,2000,t);
+export async function jogServoTravel(axis,direction){
+  await operation('servo-travel-jog',async t=>{
+    const travel=S.tele?.control?.servo_travel;
+    if(!ready()||typeof travel?.jogging!=='boolean')throw Error('当前飞控无法连续调节轴程');
+    try{
+      if(travel.axis!==axis){
+        if(travel.axis>=0||outputsActive())throw Error('请先停止全部输出');
+        S.heartbeat=true;
+        await command('heartbeat',{},1800,t);
+        await command('servo_travel_start',{axis,explicit_endpoints:true},1800,t);
+      }
+      while(ready()){
+        const sent=performance.now();
+        // 只续期按住状态，飞控独立推进 PWM，无需等待舵机遥测。
+        await command('servo_travel_jog',{axis,direction},230,t);
+        await delay(Math.max(0,80-(performance.now()-sent)));
+      }
+    }finally{
+      if(S.operation?.t===t)await command('servo_travel_hold',{},500).catch(()=>{});
+    }
   });
 }
-export async function updateServoTravel(axis,action,delta){
+export async function releaseServoTravel(){
+  if(S.operation?.kind!=='servo-travel-jog')return;
+  cancelActions();
+  ++S.stopping;render();
+  try{
+    const ack=await command('servo_travel_hold',{},500);
+    await waitTelemetry(p=>p.seq>ack.seq&&p.control?.servo_travel?.jogging===false,1000);
+  }finally{--S.stopping;S.heartbeat=outputsActive();render();}
+}
+export async function updateServoTravel(axis,action){
   await operation('servo-travel',async t=>{
     const travel=S.tele?.control?.servo_travel;
     if(!fresh()||!travel||travel.axis!==axis)throw Error('当前轴的标定已结束，请重新开始');
     const capture=action==='min'||action==='max';
     const cmd=capture?'capture':action;
-    const fields=capture?{endpoint:action}:action==='step'?{delta_us:delta}:{};
+    const fields=capture?{endpoint:action}:{};
     const ack=await command('servo_travel_'+cmd,fields,2500,t);
     await waitTelemetry(p=>{
       const next=p.control?.servo_travel;
       if(!next||p.epoch<ack.epoch)return false;
       if(action==='save')return next.axis===-1&&!p.outputs.servo_enabled&&p.config_rev>=ack.config_rev&&
         [travel.min_us,travel.zero_us,travel.max_us].every((value,i)=>next.saved_us?.[travel.axis]?.[i]===value);
-      if(next.axis!==axis||next.current_us!==next.target_us)return false;
+      if(next.axis!==axis||next.jogging||next.current_us!==next.target_us)return false;
       if(capture)return (action==='min'?next.min_us:next.max_us)===next.current_us;
       return action!=='zero'||next.zero_us===next.current_us;
     },2500,t);
